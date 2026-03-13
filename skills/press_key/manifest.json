@@ -1,0 +1,7 @@
+{
+  "name": "press_key",
+  "description": "Appuie sur une touche clavier (Return, Space, Tab, Escape, etc.)",
+  "version": "1.0.0",
+  "params": { "key": "string (défaut: Return)" },
+  "created": "2026-03-12T00:00:00.000Z"
+}

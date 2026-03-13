@@ -1,0 +1,86 @@
+# MissionFeed — Design Spec
+# Generated: 2026-03-12 04:13:52
+# Agent: wireframe
+# ============================================
+
+Voici un wireframe ASCII détaillé pour le composant React 'MissionFeed' du projet LaRuche :
+
+**MissionFeed Wireframe ASCII**
+
+```markdown
+# MissionFeed
+
+## Structure
+
+*   **Header** (10px)
+    *   **Title** (Mission Feed)
+    *   **Subtitle** (Liste des missions en cours)
+*   **Container** (80% de la largeur de l'écran)
+    *   **Missions** (liste des missions)
+        *   **Mission** (liste des missions individuelles)
+            *   **Titre** (Titre de la mission)
+            *   **Description** (Description de la mission)
+            *   **État** (État de la mission : Idle, Active, Loading, Error)
+            *   **Progress** (Progression de la mission : 0-100%)
+            *   **Actions** (Boutons pour afficher plus d'informations ou mettre à jour la mission)
+*   **Footer** (10px)
+    *   **Copyright** (Copyright LaRuche)
+```
+
+**États (idle/active/loading/error)**
+
+| État | Description |
+| --- | --- |
+| Idle | La mission est en attente de traitement |
+| Active | La mission est en cours de traitement |
+| Loading | La mission est en cours de chargement |
+| Error | La mission a échoué |
+
+**Props API**
+
+| Prop | Type | Description |
+| --- | --- | --- |
+| missions | Array | Liste des missions |
+| mission | Object | Informations d'une mission individuelle |
+| title | String | Titre de la mission |
+| subtitle | String | Sous-titre de la mission |
+| description | String | Description de la mission |
+| state | String | État de la mission (idle, active, loading, error) |
+| progress | Number | Progession de la mission (0-100%) |
+| actions | Array | Liste des actions (boutons) pour afficher plus d'informations ou mettre à jour la mission |
+
+**Exemple de mise en œuvre**
+
+```jsx
+import React from 'react';
+import MissionFeed from './MissionFeed';
+
+const App = () => {
+    const missions = [
+        {
+            title: 'Mission 1',
+            description: 'Description de la mission 1',
+            state: 'idle',
+            progress: 0,
+            actions: ['Afficher plus d\'informations', 'Mettre à jour la mission']
+        },
+        {
+            title: 'Mission 2',
+            description: 'Description de la mission 2',
+            state: 'active',
+            progress: 50,
+            actions: ['Afficher plus d\'informations', 'Mettre à jour la mission']
+        }
+    ];
+
+    return (
+        <MissionFeed
+            missions={missions}
+            title="Mission Feed"
+            subtitle="Liste des missions en cours"
+        />
+    );
+};
+```
+
+Ce wireframe ASCII fournit une structure et un layout détaillés pour le composant React 'MissionFeed' du projet LaRuche. Il inclut également les différents états de la mission et les props API nécessaires pour gérer les informations de la mission.

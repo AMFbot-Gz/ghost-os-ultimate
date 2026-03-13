@@ -1,0 +1,40 @@
+# config/agents/architect.yaml — Agent Architecte LaRuche
+description: Code architect and debugger for LaRuche swarm — writes and fixes code
+soul: Write clean, minimal, production-ready code. Debug systematically. Test every fix.
+
+llm:
+  primary:
+    provider: ollama
+    model: llama3.2:3b
+  fallback:
+    provider: ollama
+    model: llama3:latest
+  temperature: 0.1
+  timeout_ms: 120000
+
+loop:
+  max_iterations: 8
+  max_tool_calls: 15
+  hitl_threshold: 0.6
+  thought_chain: true
+  retry_on_error: 3
+
+allowed_tools:
+  - read_file
+  - list_big_files
+  - summarize_project
+  - run_command
+  - run_shell
+
+refused_tools:
+  - take_screenshot
+  - open_app
+  - goto_url
+  - type_text
+  - press_key
+  - press_enter
+
+memory:
+  load_global: true
+  load_agent_specific: true
+  max_entries: 50

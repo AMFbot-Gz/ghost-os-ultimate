@@ -1,0 +1,30 @@
+Here is a brief ASCII wireframe spec for the TelegramConsole React component:
+
+```
+TelegramConsole
+  .-----------------------.
+  |  #0D0D0D  |  Title Bar  |
+  |  >  |  Colored Dots  |
+  |  -----------------  |
+  |  Log Area        |
+  |  Timestamps     |
+  |  -----------------  |
+  |  Command Input   |
+  |  >  |  Command Prompt  |
+  |  -----------------  |
+  .-----------------------.
+
+Props:
+- `title`: string (title of the console)
+- `background`: string (background color, default: #0D0D0D)
+- `titleBarColor`: string (color of title bar dots, default: #FFFFFF)
+- `logAreaColor`: string (color of log timestamps, default: #999999)
+- `commandInputColor`: string (color of command input, default: #FFFFFF)
+
+States:
+- `activeCommand`: string (current command being typed)
+- `logMessages`: array (log messages to be displayed)
+- `titleBarActive`: boolean (is title bar active?)
+```
+
+This spec describes the basic layout and visual elements of the TelegramConsole component, including the title bar, log area, command input, and background color. It also defines the props and states that can be used to customize the component's behavior and appearance.

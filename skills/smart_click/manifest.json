@@ -1,0 +1,1 @@
+{"name":"smart_click","description":"Clique sur un élément UI par description sémantique (trouve via AX + clique via pyautogui)","version":"1.0.0","tags":["accessibility","semantic","click","computer-use","interaction"],"params":{"query":{"type":"string","required":true},"app":{"type":"string","required":false},"double":{"type":"boolean","required":false}}}

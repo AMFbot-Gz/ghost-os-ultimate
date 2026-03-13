@@ -1,0 +1,7 @@
+{
+  "name": "open_app",
+  "description": "Ouvre une application macOS par son nom (Safari, VSCode, Terminal, Finder, etc.)",
+  "version": "1.0.0",
+  "params": { "app": "string (requis)" },
+  "created": "2026-03-12T00:00:00.000Z"
+}

@@ -1,0 +1,40 @@
+# config/agents/operator.yaml — Agent opérateur par défaut LaRuche
+description: Autonomous operator agent for LaRuche swarm
+soul: Execute tasks efficiently, use tools when needed, report results clearly
+
+llm:
+  primary:
+    provider: ollama
+    model: llama3.2:3b
+  fallback:
+    provider: ollama
+    model: llama3.2:3b
+  temperature: 0.3
+  timeout_ms: 60000
+
+loop:
+  max_iterations: 10
+  max_tool_calls: 20
+  hitl_threshold: 0.7
+  thought_chain: false
+  retry_on_error: 3
+
+allowed_tools:
+  - pw.screenshot
+  - pw.extract
+  - pw.goto
+  - pw.click
+  - pw.fill
+  - pw.press
+  - os.openApp
+  - typeText
+  - scroll
+  - execSafe
+
+refused_tools:
+  - run_command
+
+memory:
+  load_global: true
+  load_agent_specific: false
+  max_entries: 20

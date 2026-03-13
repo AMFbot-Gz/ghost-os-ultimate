@@ -1,0 +1,1 @@
+{"name":"screen_elements","description":"Analyse sémantique complète de l'écran: app, résolution, éléments UI groupés par rôle","version":"1.0.0","tags":["accessibility","semantic","screen","computer-use","perception"],"params":{"app":{"type":"string","required":false}}}

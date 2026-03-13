@@ -1,0 +1,7 @@
+{
+  "name": "run_command",
+  "description": "Exécute une commande shell sûre (ls, cat, git, npm, node, python3, curl)",
+  "version": "1.0.0",
+  "params": { "command": "string (requis)", "cwd": "string (optionnel)", "timeout": "number (défaut: 10000)" },
+  "created": "2026-03-12T00:00:00.000Z"
+}

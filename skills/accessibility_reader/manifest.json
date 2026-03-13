@@ -1,0 +1,1 @@
+{"name":"accessibility_reader","description":"Lit l'arbre AX macOS et retourne tous les éléments UI sémantiques","version":"1.0.0","tags":["accessibility","macos","semantic","ui","computer-use"],"params":{"app":{"type":"string","required":false},"roles":{"type":"array","required":false}}}

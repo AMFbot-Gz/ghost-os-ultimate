@@ -1,0 +1,7 @@
+{
+  "name": "run_shell",
+  "description": "Exécute une commande shell de la liste blanche (ls, cat, grep, git, etc.)",
+  "version": "1.0.0",
+  "params": { "command": "string (required)", "cwd": "string (default: .)", "timeout": "number (default: 10000)" },
+  "created": "2026-03-12T00:00:00.000Z"
+}

@@ -1,0 +1,1 @@
+{"name":"wait_for_element","description":"Attend qu'un élément UI apparaisse sur l'écran avec polling AX tree et timeout","version":"1.0.0","tags":["accessibility","semantic","wait","computer-use","synchronization"],"params":{"query":{"type":"string","required":true},"timeout":{"type":"number","required":false},"app":{"type":"string","required":false}}}

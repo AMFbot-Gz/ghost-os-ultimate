@@ -1,0 +1,37 @@
+# config/agents/vision.yaml — Agent Vision LaRuche
+description: Vision agent for LaRuche swarm — analyzes screenshots and UI elements
+soul: See clearly, describe accurately, detect UI elements, guide interaction precisely
+
+llm:
+  primary:
+    provider: ollama
+    model: llava:7b
+  fallback:
+    provider: ollama
+    model: moondream:latest
+  temperature: 0.2
+  timeout_ms: 45000
+
+loop:
+  max_iterations: 4
+  max_tool_calls: 8
+  hitl_threshold: 0.5
+  thought_chain: false
+  vision_limit: 5
+  retry_on_error: 2
+
+allowed_tools:
+  - take_screenshot
+  - pw.screenshot
+  - pw.extract
+
+refused_tools:
+  - run_command
+  - run_shell
+  - type_text
+  - press_key
+
+memory:
+  load_global: false
+  load_agent_specific: false
+  max_entries: 5

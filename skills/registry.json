@@ -1,0 +1,170 @@
+{
+  "version": "1.1.0",
+  "lastUpdated": "2026-03-13T23:35:53.560674",
+  "skills": [
+    {
+      "name": "accessibility_reader",
+      "description": "Lit l'arbre AX macOS et retourne tous les \u00e9l\u00e9ments UI s\u00e9mantiques",
+      "version": "1.0.0",
+      "created": "2026-03-12T00:00:00.000Z"
+    },
+    {
+      "name": "agent_bridge",
+      "description": "Pont ESM vers les couches Python de PICO-RUCHE \u2014 envoie des missions \u00e0 queen (8001) ou des pens\u00e9es \u00e0 brain (8003)",
+      "version": "1.0.0",
+      "created": "2026-03-12T00:00:00.000Z"
+    },
+    {
+      "name": "find_element",
+      "description": "Trouve un \u00e9l\u00e9ment UI par description s\u00e9mantique via l'arbre AX macOS",
+      "version": "1.0.0",
+      "created": "2026-03-12T00:00:00.000Z"
+    },
+    {
+      "name": "goto_url",
+      "description": "Ouvre une URL dans Safari",
+      "version": "1.0.0",
+      "created": "2026-03-12T00:00:00.000Z"
+    },
+    {
+      "name": "http_fetch",
+      "description": "Fait un appel HTTP (GET/POST) et retourne le contenu texte",
+      "version": "1.0.0",
+      "created": "2026-03-12T00:00:00.000Z"
+    },
+    {
+      "name": "list_big_files",
+      "description": "Liste les N fichiers les plus lourds d'un dossier (exclude node_modules, .git)",
+      "version": "1.0.0",
+      "created": "2026-03-12T00:00:00.000Z"
+    },
+    {
+      "name": "open_app",
+      "description": "Ouvre une application macOS par son nom (Safari, VSCode, Terminal, Finder, etc.)",
+      "version": "1.0.0",
+      "created": "2026-03-12T00:00:00.000Z"
+    },
+    {
+      "name": "press_enter",
+      "description": "Appuie sur la touche Entr\u00e9e",
+      "version": "1.0.0",
+      "created": "2026-03-12T00:00:00.000Z"
+    },
+    {
+      "name": "press_key",
+      "description": "Appuie sur une touche clavier (Return, Space, Tab, Escape, etc.)",
+      "version": "1.0.0",
+      "created": "2026-03-12T00:00:00.000Z"
+    },
+    {
+      "name": "read_file",
+      "description": "Lit un fichier local et retourne son contenu (max 8000 chars par d\u00e9faut)",
+      "version": "1.0.0",
+      "created": "2026-03-12T00:00:00.000Z"
+    },
+    {
+      "name": "run_command",
+      "description": "Ex\u00e9cute une commande shell s\u00fbre (ls, cat, git, npm, node, python3, curl)",
+      "version": "1.0.0",
+      "created": "2026-03-12T00:00:00.000Z"
+    },
+    {
+      "name": "run_shell",
+      "description": "Ex\u00e9cute une commande shell de la liste blanche (ls, cat, grep, git, etc.)",
+      "version": "1.0.0",
+      "created": "2026-03-12T00:00:00.000Z"
+    },
+    {
+      "name": "screen_elements",
+      "description": "Analyse s\u00e9mantique compl\u00e8te de l'\u00e9cran: app, r\u00e9solution, \u00e9l\u00e9ments UI group\u00e9s par r\u00f4le",
+      "version": "1.0.0",
+      "created": "2026-03-12T00:00:00.000Z"
+    },
+    {
+      "name": "smart_click",
+      "description": "Clique sur un \u00e9l\u00e9ment UI par description s\u00e9mantique (trouve via AX + clique via pyautogui)",
+      "version": "1.0.0",
+      "created": "2026-03-12T00:00:00.000Z"
+    },
+    {
+      "name": "summarize_project",
+      "description": "G\u00e9n\u00e8re un r\u00e9sum\u00e9 de la structure d'un projet (arbre, package.json, README)",
+      "version": "1.0.0",
+      "created": "2026-03-12T00:00:00.000Z"
+    },
+    {
+      "name": "take_screenshot",
+      "description": "Prend une capture d'\u00e9cran de l'\u00e9cran macOS et retourne le chemin",
+      "version": "1.0.0",
+      "created": "2026-03-12T00:00:00.000Z"
+    },
+    {
+      "name": "telegram_notify",
+      "description": "Envoie un message Telegram via BOT_TOKEN + CHAT_ID (variables d'env)",
+      "version": "1.0.0",
+      "created": "2026-03-12T00:00:00.000Z"
+    },
+    {
+      "name": "type_text",
+      "description": "Tape du texte dans le champ actif via AppleScript",
+      "version": "1.0.0",
+      "created": "2026-03-12T00:00:00.000Z"
+    },
+    {
+      "name": "wait_for_element",
+      "description": "Attend qu'un \u00e9l\u00e9ment UI apparaisse sur l'\u00e9cran avec polling AX tree et timeout",
+      "version": "1.0.0",
+      "created": "2026-03-12T00:00:00.000Z"
+    },
+    {
+      "name": "automatise_l_organisation_des_t_l_charge",
+      "description": "Automatise l'organisation des t\u00e9l\u00e9chargements par type de fichier et date",
+      "version": "1.0.0",
+      "tier": "Community",
+      "created": "2026-03-13T03:01:30.591Z"
+    },
+    {
+      "name": "organise_les_screenshots_par_date_et_les",
+      "description": "Organise les screenshots par date et les compresse",
+      "version": "1.0.0",
+      "tier": "System",
+      "created": "2026-03-13T03:03:06.021Z"
+    },
+    {
+      "name": "open_google",
+      "description": "Ouvre https://google.com dans Safari",
+      "version": "1.0.0",
+      "tier": "learned",
+      "learned_from": "Demande utilisateur : sauvegarder un skill pour ouvrir Google dans Safari",
+      "created": "2026-03-13T04:48:18.257153",
+      "author": "claude-architecte"
+    },
+    {
+      "name": "update_world_state",
+      "description": "Met \u00e0 jour ~/world_state.json apr\u00e8s chaque mission \u2014 proc\u00e9dure obligatoire de fin de mission",
+      "version": "1.0.0",
+      "tier": "learned",
+      "learned_from": "Mission: cr\u00e9er habitude de mise \u00e0 jour world_state apr\u00e8s chaque mission",
+      "created": "2026-03-13T05:46:43.682655",
+      "author": "claude-architecte"
+    },
+    {
+      "name": "invoke_claude_code",
+      "description": "Lance Claude Code en mode non-interactif depuis le terminal, en contournant la d\u00e9tection de session imbriqu\u00e9e",
+      "version": "1.0.0",
+      "tier": "learned",
+      "learned_from": "Test de communication avec Claude Code depuis LaRuche MCP",
+      "created": "2026-03-13T08:48:08.588958",
+      "author": "claude-architecte"
+    },
+    {
+      "name": "mouse_control",
+      "description": "Contr\u00f4le la souris macOS via Python Quartz CoreGraphics \u2014 d\u00e9placer, cliquer, cercle demo",
+      "version": "1.0.0",
+      "tier": "learned",
+      "learned_from": "Test de contr\u00f4le souris via HID \u2014 contournement du module HID MCP cass\u00e9",
+      "created": "2026-03-13T23:35:53.559808",
+      "author": "claude-architecte"
+    }
+  ]
+}

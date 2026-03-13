@@ -1,0 +1,7 @@
+{
+  "name": "read_file",
+  "description": "Lit un fichier local et retourne son contenu (max 8000 chars par défaut)",
+  "version": "1.0.0",
+  "params": { "path": "string (required)", "maxChars": "number (default: 8000)" },
+  "created": "2026-03-12T00:00:00.000Z"
+}

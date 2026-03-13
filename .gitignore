@@ -1,0 +1,79 @@
+# Secrets — NE JAMAIS committer
+.env
+.env.*
+*.env
+!.env.example
+credentials.json
+
+# Dependencies
+node_modules/
+npm-debug.log*
+.venv/
+venv/
+env/
+__pycache__/
+*.py[cod]
+*.pyc
+*.pyo
+*.pyd
+*.egg-info/
+*.egg
+
+# LaRuche data
+.laruche/temp/
+.laruche/rollback/
+.laruche/logs/
+.laruche/config.json
+.laruche/missions.json
+.laruche/cron_history.json
+vault/
+*.db
+*.db-journal
+*.jsonl
+agent/memory/*.db
+agent/memory/*.jsonl
+
+# PIDs
+*.pid
+agent/.pids/
+agent/pids/
+
+# Build
+dist/
+build/
+.vite/
+out/
+
+# System
+.DS_Store
+Thumbs.db
+*.log
+*.bak
+
+# Screenshots
+screenshots/
+*.png
+*.jpg
+
+# Editor
+.idea/
+.vscode/
+*.sublime-*
+*.swp
+*.swo
+
+# Coverage reports
+coverage/
+.coverage
+htmlcov/
+.pytest_cache/
+
+# Dossier projet imbriqué
+LaRuche/
+
+# Memory — pas versionné (généré au runtime)
+data/learned_routes.json
+data/mission_log.jsonl
+
+.env.save
+test-report.html

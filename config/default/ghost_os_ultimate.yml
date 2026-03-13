@@ -1,0 +1,170 @@
+# Ghost OS Ultimate — Configuration centrale
+# Fusion LaRuche v5.0 + PICO-RUCHE + nouveaux composants
+version: "1.0.0"
+codename: "GHOST OS ULTIMATE"
+
+hardware:
+  target: "Intel Core i7-9750H 16GB"   # Machine de Wiaam — s'adapte automatiquement
+
+# ─── Cœur de conscience ────────────────────────────────────────────────────────
+core:
+  consciousness:
+    enabled: true
+    loop_interval_sec: 30
+    learning_mode: continuous          # continuous | paused | offline
+    max_consecutive_errors: 5
+
+  memory:
+    max_episodes: 10000
+    episode_file: "agent/memory/episodes.jsonl"
+    persistent_file: "agent/memory/persistent.md"
+    world_state_file: "agent/memory/world_state.json"
+    compress_at: 0.9                   # Compresse à 90% de capacité
+    vector_dims: 64                    # Dimensions du vecteur bag-of-words
+
+  perception:
+    interval_seconds: 30
+    screenshot_enabled: true
+    system_scan_enabled: true
+    change_threshold: 0.05
+    modalities:
+      - visual
+      - system
+      # - audio                        # Désactivé par défaut (ressources)
+      # - network
+
+# ─── Ports des couches Python ─────────────────────────────────────────────────
+ports:
+  queen: 8001
+  perception: 8002
+  brain: 8003
+  executor: 8004
+  evolution: 8005
+  memory: 8006
+  mcp_bridge: 8007
+  # Node.js Queen
+  node_queen: 3000
+  hud: 9001
+  dashboard: 5173
+
+# ─── Modèles LLM ─────────────────────────────────────────────────────────────
+ollama:
+  base_url: "http://localhost:11434"
+  keep_alive: -1                        # Garde les modèles en RAM
+  models:
+    strategist: "llama3:latest"         # Planification haute qualité
+    worker: "llama3.2:3b"              # Tâches rapides
+    vision: "moondream:latest"          # Vision légère
+    coder: "llama3.2:3b"               # Génération de code
+    compressor: "llama3.2:3b"          # Compression contexte
+  timeout: 120
+
+# Modèles cloud (fallback optionnel)
+cloud_llm:
+  claude:
+    enabled: true
+    model: "claude-opus-4-6"
+    strategist_only: true               # Utilisé uniquement pour planification haute valeur
+  kimi:
+    enabled: false
+    model: "moonshot-v1-8k"
+  openai:
+    enabled: false
+    model: "gpt-4o"
+
+# ─── Modes d'exécution ───────────────────────────────────────────────────────
+runtime:
+  default_mode: "ultimate"
+  auto_switch: true                     # Bascule en lite si RAM < 4GB
+  modes:
+    ultimate:
+      memory: "unlimited"
+      cpu: "maximum"
+      parallel_missions: 5
+      consciousness: true
+      swarm: true
+    lite:
+      memory: "500MB"
+      cpu: 2
+      parallel_missions: 1
+      consciousness: false
+      swarm: false
+    cloud:
+      parallel_missions: 10
+      consciousness: true
+      swarm: true
+
+# ─── Brain (planification) ───────────────────────────────────────────────────
+brain:
+  max_context_tokens: 8000
+  compress_threshold: 6000
+  max_subtasks: 5
+  risk_levels: [low, medium, high]
+  auto_act_on: [low, medium, high]
+  hitl_required_on: []
+
+# ─── Sécurité ─────────────────────────────────────────────────────────────────
+security:
+  hitl_mode: "autonomous"
+  max_shell_timeout: 30
+  output_max_chars: 10000
+  blocked_shell_patterns:
+    - "rm -rf /"
+    - ":(){ :|:& };:"
+    - "dd if=/dev/zero"
+    - "mkfs"
+    - "shutdown"
+    - "reboot"
+  require_confirmation_for:
+    - delete
+    - format
+    - kill
+    - shutdown
+
+# ─── Telegram HITL ───────────────────────────────────────────────────────────
+telegram:
+  enabled: true
+  hitl_timeout_seconds: 120
+  commands:
+    - /status   → état de l'essaim
+    - /mission  → lancer une mission
+    - /stop     → arrêter une mission
+
+# ─── MCP Bridge ──────────────────────────────────────────────────────────────
+mcp:
+  node_base_url: "http://localhost:3000"
+  timeout: 30
+  tools:
+    - { name: "os-control",    endpoint: "/mcp/os-control" }
+    - { name: "terminal",      endpoint: "/mcp/terminal" }
+    - { name: "vision",        endpoint: "/mcp/vision" }
+    - { name: "vault",         endpoint: "/mcp/vault" }
+    - { name: "rollback",      endpoint: "/mcp/rollback" }
+    - { name: "skill-factory", endpoint: "/mcp/skill-factory" }
+    - { name: "janitor",       endpoint: "/mcp/janitor" }
+
+# ─── Marketplace ─────────────────────────────────────────────────────────────
+marketplace:
+  local_registry: "skills/registry.json"
+  auto_update_check: 3600              # Vérifie les mises à jour toutes les heures
+  validation:
+    require_manifest: true
+    require_skill_js: true
+    name_pattern: "^[a-z0-9_]+$"
+
+# ─── Monitoring ──────────────────────────────────────────────────────────────
+monitoring:
+  metrics_collection: true
+  performance_profiling: false         # Activé en mode debug
+  alert_thresholds:
+    error_rate: 0.05
+    latency_ms: 3000
+    memory_usage: 0.8
+    cpu_usage: 0.9
+
+# ─── MLX (Apple Silicon optionnel) ──────────────────────────────────────────
+mlx:
+  enabled: false
+  model_path: "./mlx-models/qwen3-7b"
+  server_url: "http://127.0.0.1:8080/v1"
+  fallback_to_ollama: true

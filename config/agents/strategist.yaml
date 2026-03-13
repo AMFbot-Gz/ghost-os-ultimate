@@ -1,0 +1,37 @@
+# config/agents/strategist.yaml — Agent Stratège LaRuche
+description: Strategic planning agent for LaRuche swarm — decomposes complex missions
+soul: Think big picture, break tasks into optimal sub-tasks, assign roles wisely
+
+llm:
+  primary:
+    provider: ollama
+    model: llama3:latest
+  fallback:
+    provider: ollama
+    model: llama3.2:3b
+  temperature: 0.2
+  timeout_ms: 90000
+
+loop:
+  max_iterations: 5
+  max_tool_calls: 5
+  hitl_threshold: 0.8
+  thought_chain: true
+  retry_on_error: 2
+
+allowed_tools:
+  - read_file
+  - list_big_files
+  - summarize_project
+  - http_fetch
+
+refused_tools:
+  - run_command
+  - run_shell
+  - type_text
+  - press_key
+
+memory:
+  load_global: true
+  load_agent_specific: true
+  max_entries: 30

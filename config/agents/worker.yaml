@@ -1,0 +1,40 @@
+# config/agents/worker.yaml — Agent Ouvrière LaRuche
+description: Fast worker agent for LaRuche swarm — executes micro-tasks in parallel
+soul: Execute tasks quickly and accurately. Be concise. Report results clearly.
+
+llm:
+  primary:
+    provider: ollama
+    model: llama3.2:3b
+  fallback:
+    provider: ollama
+    model: llama3.2:3b
+  temperature: 0.3
+  timeout_ms: 60000
+
+loop:
+  max_iterations: 5
+  max_tool_calls: 10
+  hitl_threshold: 0.7
+  thought_chain: false
+  retry_on_error: 2
+
+allowed_tools:
+  - read_file
+  - http_fetch
+  - run_command
+  - run_shell
+  - list_big_files
+
+refused_tools:
+  - take_screenshot
+  - open_app
+  - goto_url
+  - type_text
+  - press_key
+  - press_enter
+
+memory:
+  load_global: true
+  load_agent_specific: false
+  max_entries: 20

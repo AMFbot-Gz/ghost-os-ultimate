@@ -1,0 +1,7 @@
+/* LaRuche — Tailwind CSS utilities layer
+   Preflight is DISABLED — existing CSS variables in index.css are preserved.
+   Only utility classes are added here. */
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;

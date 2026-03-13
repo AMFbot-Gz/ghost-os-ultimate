@@ -1,0 +1,52 @@
+# LaRuche Cron Jobs
+# Format: standard cron expression
+# Agent: which agent executes this job
+# IMPORTANT: les actions sont des commandes bash réelles, pas du langage naturel
+
+version: "1.0"
+
+jobs:
+  - id: daily_cleanup
+    name: "Nettoyage quotidien"
+    schedule: "0 3 * * *"
+    agent: devops
+    action: |
+      rm -rf .laruche/temp/* 2>/dev/null || true
+      find agent/logs -name "*.log" -size +5M -exec truncate -s 1M {} \; 2>/dev/null || true
+      find .laruche/snapshots -mtime +7 -delete 2>/dev/null || true
+    enabled: true
+
+  - id: hourly_health
+    name: "Health check horaire"
+    schedule: "0 * * * *"
+    agent: devops
+    action: |
+      curl -sf http://localhost:11434/api/tags > /dev/null
+      curl -sf http://localhost:3000/api/health > /dev/null
+      curl -sf http://localhost:8001/health > /dev/null
+      df / | awk 'NR>1{gsub(/%/,""); if($5+0>90){exit 1}}'
+    enabled: true
+
+  - id: regression_tests
+    name: "Tests de régression nocturnes"
+    schedule: "0 2 * * *"
+    agent: devops
+    action: |
+      node test/smoke.js
+    enabled: true
+
+  - id: morning_briefing
+    name: "Briefing matinal"
+    schedule: "0 9 * * 1-5"
+    agent: devops
+    action: |
+      echo "Briefing: $(date '+%Y-%m-%d')" && tail -20 agent/logs/queen.log
+    enabled: false
+
+  - id: weekly_memory
+    name: "Consolidation mémoire hebdo"
+    schedule: "0 2 * * 0"
+    agent: builder
+    action: |
+      node scripts/consolidate_memory.js 2>/dev/null || echo "consolidate_memory non disponible"
+    enabled: false

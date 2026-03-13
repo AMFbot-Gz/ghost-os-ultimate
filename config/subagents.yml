@@ -1,0 +1,19 @@
+# config/subagents.yml — Configuration externe des sous-agents LaRuche
+# Ces valeurs surchargent les paramètres définis dans les fichiers agents/*.js
+# Version: 1.0.0
+
+subagents:
+  dev_agent:
+    model: llama3.2:3b
+    maxConcurrent: 2
+    timeout: 120000
+
+  ops_agent:
+    model: llama3.2:3b
+    maxConcurrent: 1
+    timeout: 60000
+
+  knowledge_agent:
+    model: llama3:latest
+    maxConcurrent: 1
+    timeout: 180000

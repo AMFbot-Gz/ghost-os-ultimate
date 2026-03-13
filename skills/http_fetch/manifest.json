@@ -1,0 +1,7 @@
+{
+  "name": "http_fetch",
+  "description": "Fait un appel HTTP (GET/POST) et retourne le contenu texte",
+  "version": "1.0.0",
+  "params": { "url": "string (required)", "method": "string (default: GET)", "headers": "object", "body": "object" },
+  "created": "2026-03-12T00:00:00.000Z"
+}

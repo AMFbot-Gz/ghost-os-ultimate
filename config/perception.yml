@@ -1,0 +1,16 @@
+perception:
+  pollIntervalMs: 250
+  timeoutMs: 5000
+  ttl:
+    Safari: 500
+    Chrome: 500
+    "Google Chrome": 500
+    Firefox: 500
+    Terminal: 200
+    Finder: 2000
+    Xcode: 1000
+    VSCode: 300
+    _default: 1000
+  hud:
+    enabled: true
+    eventType: "perception:change"

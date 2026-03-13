@@ -1,0 +1,7 @@
+{
+  "name": "goto_url",
+  "description": "Ouvre une URL dans Safari",
+  "version": "1.0.0",
+  "params": { "url": "string (requis)" },
+  "created": "2026-03-12T00:00:00.000Z"
+}

@@ -1,0 +1,7 @@
+{
+  "name": "list_big_files",
+  "description": "Liste les N fichiers les plus lourds d'un dossier (exclude node_modules, .git)",
+  "version": "1.0.0",
+  "params": { "dir": "string (default: .)", "limit": "number (default: 10)" },
+  "created": "2026-03-12T00:00:00.000Z"
+}

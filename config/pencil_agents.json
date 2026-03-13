@@ -1,0 +1,107 @@
+{
+  "version": "1.0.0",
+  "description": "LaRuche Pencil Agents — Design generation config",
+  "agents": [
+    {
+      "id": "wireframe",
+      "name": "Wireframe Agent",
+      "role": "UX layout & structure",
+      "model": "llama3.2",
+      "outputDir": "designs/",
+      "outputExt": ".pen",
+      "system": "Tu es un expert UX. Génère des wireframes ASCII détaillés pour des composants React. Inclus la structure HTML sémantique, les breakpoints, et les interactions.",
+      "temperature": 0.3
+    },
+    {
+      "id": "style",
+      "name": "Style Agent",
+      "role": "CSS & design tokens",
+      "model": "codellama",
+      "outputDir": "designs/",
+      "outputExt": ".pen",
+      "system": "Tu es un expert CSS. Génère des styles cohérents en utilisant les variables CSS de LaRuche (--bg, --surface, --primary, --text, etc.). Préfère CSS pur + quelques utilitaires Tailwind.",
+      "temperature": 0.2
+    },
+    {
+      "id": "component",
+      "name": "Component Agent",
+      "role": "React component generation",
+      "model": "deepseek-coder",
+      "outputDir": "src/components/",
+      "outputExt": ".jsx",
+      "system": "Tu es un expert React 18. Génère des composants fonctionnels avec hooks, mock data réaliste, gestion d'erreurs, et styles inline + CSS variables. Pas de dépendances inutiles.",
+      "temperature": 0.15
+    },
+    {
+      "id": "review",
+      "name": "Review Agent",
+      "role": "Design review & accessibility",
+      "model": "mistral",
+      "outputDir": "designs/reviews/",
+      "outputExt": ".md",
+      "system": "Tu es un expert en accessibilité web et design systems. Audite les composants React pour WCAG 2.1, cohérence visuelle, performance, et bonnes pratiques React.",
+      "temperature": 0.4
+    }
+  ],
+  "pipeline": {
+    "dashboard": {
+      "steps": ["wireframe", "style", "component", "review"],
+      "components": [
+        "StatusGrid",
+        "MissionFeed",
+        "CostMeter",
+        "TelegramConsole"
+      ]
+    },
+    "hud": {
+      "steps": ["wireframe", "component", "review"],
+      "components": [
+        "HUDOverlay",
+        "HITLModal"
+      ]
+    }
+  },
+  "designTokens": {
+    "colors": {
+      "bg": "#1A1915",
+      "surface": "#222119",
+      "surface2": "#2A2921",
+      "surface3": "#33312A",
+      "surface4": "#3D3B33",
+      "primary": "#E07B54",
+      "amber": "#F59E0B",
+      "text": "#F2F0EA",
+      "text2": "#A09C94",
+      "text3": "#6B6760",
+      "green": "#4ADE80",
+      "red": "#F87171",
+      "yellow": "#FBB24C",
+      "blue": "#60A5FA",
+      "violet": "#6366F1"
+    },
+    "agents": {
+      "strategist": { "color": "#6366f1", "icon": "🧠" },
+      "architect": { "color": "#3b82f6", "icon": "⚡" },
+      "worker": { "color": "#f59e0b", "icon": "🔧" },
+      "vision": { "color": "#10b981", "icon": "👁" }
+    },
+    "fonts": {
+      "sans": "Inter, -apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif",
+      "mono": "'JetBrains Mono', 'Fira Code', monospace"
+    },
+    "radii": {
+      "sm": "6px",
+      "md": "10px",
+      "lg": "14px",
+      "xl": "20px"
+    }
+  },
+  "buildConfig": {
+    "outputRoot": "/Users/wiaamhadara/LaRuche",
+    "dashboardDesigns": "dashboard/designs",
+    "hudDesigns": "hud/designs",
+    "logFile": ".laruche/logs/design_build.log",
+    "parallel": true,
+    "maxWorkers": 2
+  }
+}

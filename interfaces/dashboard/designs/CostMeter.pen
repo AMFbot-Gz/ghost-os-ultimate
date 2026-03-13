@@ -1,0 +1,133 @@
+# CostMeter — Design Spec
+# Generated: 2026-03-12 04:15:38
+# Agent: wireframe
+# ============================================
+
+Voici un wireframe ASCII détaillé pour le composant React 'CostMeter' du projet LaRuche :
+
+**Structure**
+
+```
++---------------+
+|  Header     |
++---------------+
+|  Title       |
+|  Subtitle    |
++---------------+
++---------------+
+|  Content     |
++---------------+
+|  Cost Meter  |
+|  (graphique) |
++---------------+
++---------------+
+|  Footer      |
++---------------+
+|  Copyright  |
+|  Credits     |
++---------------+
+```
+
+**Layout**
+
+```
++---------------+---------------+
+|  Header      |  Content      |
+|  (50% width) |  (50% width)  |
++---------------+---------------+
+|  Title        |  Cost Meter    |
+|  (20% width)  |  (graphique)  |
++---------------+---------------+
+|  Subtitle     |  (empty)      |
+|  (10% width)  |  (empty)      |
++---------------+---------------+
+|  (empty)      |  (empty)      |
++---------------+---------------+
+|  Footer       |  (empty)      |
+|  (20% width)  |  (empty)      |
++---------------+---------------+
+```
+
+**États (idle/active/loading/error)**
+
+```
++---------------+---------------+
+|  Idle         |  Active       |
+|  (graphique) |  (graphique)  |
++---------------+---------------+
+|  Loading     |  (graphique)  |
+|  (spinner)  |  (graphique)  |
++---------------+---------------+
+|  Error       |  (graphique)  |
+|  (erreur)    |  (graphique)  |
++---------------+---------------+
+```
+
+**Props API**
+
+```
++---------------+
+|  Props       |
++---------------+
+|  title       | (string)
+|  subtitle    | (string)
+|  cost         | (number)
+|  unit         | (string)
+|  color        | (string)
+|  size         | (number)
+|  loading      | (boolean)
+|  error        | (boolean)
+|  onCostChange | (function)
++---------------+
+```
+
+**Exemple de mise en œuvre**
+
+```jsx
+import React from 'react';
+
+const CostMeter = ({
+  title,
+  subtitle,
+  cost,
+  unit,
+  color,
+  size,
+  loading,
+  error,
+  onCostChange,
+}) => {
+  const handleCostChange = () => {
+    onCostChange(cost);
+  };
+
+  return (
+    <div>
+      <h2>{title}</h2>
+      <p>{subtitle}</p>
+      <div
+        style={{
+          width: size,
+          height: size,
+          backgroundColor: color,
+          display: 'flex',
+          justifyContent: 'center',
+          alignItems: 'center',
+        }}
+      >
+        {loading ? (
+          <div style={{ fontSize: 16, color: 'white' }}>Chargement...</div>
+        ) : (
+          <div style={{ fontSize: 16, color: 'white' }}>{cost} {unit}</div>
+        )}
+      </div>
+      <button onClick={handleCostChange}>Mettre à jour</button>
+      {error && <div style={{ color: 'red' }}>Erreur</div>}
+    </div>
+  );
+};
+
+export default CostMeter;
+```
+
+Ce wireframe ASCII détaillé présente la structure, le layout et les états du composant React 'CostMeter' du projet LaRuche. Il inclut également les props API nécessaires pour personnaliser le comportement du composant.

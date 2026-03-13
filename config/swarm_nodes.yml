@@ -1,0 +1,15 @@
+swarm:
+  enabled: false  # activer si plusieurs machines disponibles
+  healthCheckIntervalMs: 30000
+  selectionStrategy: least_loaded  # round_robin | least_loaded | latency_aware
+  nodes:
+    - id: mac-local
+      url: http://localhost:11434
+      models: [llama3:latest, llama3.2:3b, llava:7b, moondream:latest]
+      role: primary
+      maxConcurrency: 3
+    # - id: pc-vision
+    #   url: http://192.168.1.42:11434
+    #   models: [llava:13b]
+    #   role: vision
+    #   maxConcurrency: 2

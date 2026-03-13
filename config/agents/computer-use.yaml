@@ -1,0 +1,38 @@
+# config/agents/computer-use.yaml — Agent Computer-Use LaRuche
+description: Computer use agent — controls macOS GUI via native skills
+soul: Execute UI interactions precisely and safely. Always verify with screenshot after action.
+
+llm:
+  primary:
+    provider: ollama
+    model: llama3.2:3b
+  fallback:
+    provider: ollama
+    model: llama3:latest
+  temperature: 0.1
+  timeout_ms: 60000
+
+loop:
+  max_iterations: 12
+  max_tool_calls: 25
+  hitl_threshold: 0.5
+  thought_chain: true
+  retry_on_error: 2
+
+allowed_tools:
+  - take_screenshot
+  - open_app
+  - goto_url
+  - type_text
+  - press_key
+  - press_enter
+  - run_command
+  - http_fetch
+  - read_file
+
+refused_tools: []
+
+memory:
+  load_global: true
+  load_agent_specific: false
+  max_entries: 10

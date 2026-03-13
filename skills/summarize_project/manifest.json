@@ -1,0 +1,7 @@
+{
+  "name": "summarize_project",
+  "description": "Génère un résumé de la structure d'un projet (arbre, package.json, README)",
+  "version": "1.0.0",
+  "params": { "dir": "string (default: .)" },
+  "created": "2026-03-12T00:00:00.000Z"
+}

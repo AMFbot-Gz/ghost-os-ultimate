@@ -1,0 +1,1 @@
+{"name":"find_element","description":"Trouve un élément UI par description sémantique via l'arbre AX macOS","version":"1.0.0","tags":["accessibility","semantic","ui","find","computer-use"],"params":{"query":{"type":"string","required":true},"app":{"type":"string","required":false},"threshold":{"type":"number","required":false}}}

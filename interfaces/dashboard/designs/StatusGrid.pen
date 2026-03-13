@@ -1,0 +1,124 @@
+# StatusGrid — Design Spec
+# Generated: 2026-03-12 04:12:39
+# Agent: wireframe
+# ============================================
+
+Voici un wireframe ASCII détaillé pour le composant React `StatusGrid` du projet LaRuche :
+
+```
++---------------------------------------+
+|                  Header                |
++---------------------------------------+
+|  +---------------------------------+  |
+|  |  Title  |  Actions  |  Filter  |
+|  +---------------------------------+  |
+|  |  Status  |  Refresh  |  Reset    |
+|  +---------------------------------+  |
++---------------------------------------+
+
++---------------------------------------+
+|                  StatusGrid          |
++---------------------------------------+
+|  +---------------------------------+  |
+|  |  Idle  |  Active  |  Loading  |  Error  |
+|  +---------------------------------+  |
+|  |  [Status]  |  [Status]  |  [Status]  |  [Status]  |
+|  +---------------------------------+  |
+|  |  [Count]  |  [Count]  |  [Count]  |  [Count]  |
+|  +---------------------------------+  |
++---------------------------------------+
+
++---------------------------------------+
+|                  Footer              |
++---------------------------------------+
+|  +---------------------------------+  |
+|  |  Help  |  About  |  Feedback  |
+|  +---------------------------------+  |
++---------------------------------------+
+```
+
+**Structure**
+
+*   Le composant `StatusGrid` est composé de trois parties principales : la barre de navigation, le tableau de statut et la barre de pied.
+*   La barre de navigation contient le titre du composant, les actions de refresh et de reset, ainsi que un filtre.
+*   Le tableau de statut affiche les statuts actuels, divisés en quatre états : idle, active, loading et error.
+*   Chaque état affiche un statut et un comptage correspondant.
+*   La barre de pied contient des liens vers l'aide, l'about et le feedback.
+
+**Layout**
+
+*   La barre de navigation est positionnée en haut de la page.
+*   Le tableau de statut est positionné en bas de la barre de navigation.
+*   La barre de pied est positionnée en bas de la page.
+
+**États**
+
+*   **Idle** : le statut actuel est "Idle" et le comptage est affiché.
+*   **Active** : le statut actuel est "Active" et le comptage est affiché.
+*   **Loading** : le statut actuel est "Loading" et le comptage est affiché.
+*   **Error** : le statut actuel est "Error" et le comptage est affiché.
+
+**Props API**
+
+*   `title` : le titre du composant.
+*   `actions` : les actions de refresh et de reset.
+*   `filter` : le filtre à appliquer au tableau de statut.
+*   `data` : les données à afficher dans le tableau de statut.
+*   `onRefresh` : la fonction à appeler lorsqu'on clique sur le bouton de refresh.
+*   `onReset` : la fonction à appeler lorsqu'on clique sur le bouton de reset.
+
+Voici un exemple de code pour le composant `StatusGrid` :
+```jsx
+import React from 'react';
+
+const StatusGrid = ({
+  title,
+  actions,
+  filter,
+  data,
+  onRefresh,
+  onReset,
+}) => {
+  const handleRefresh = () => {
+    onRefresh();
+  };
+
+  const handleReset = () => {
+    onReset();
+  };
+
+  return (
+    <div>
+      <h1>{title}</h1>
+      <div>
+        <button onClick={handleRefresh}>Refresh</button>
+        <button onClick={handleReset}>Reset</button>
+        <input type="text" value={filter} onChange={(e) => setFilter(e.target.value)} />
+      </div>
+      <table>
+        <thead>
+          <tr>
+            <th>Statut</th>
+            <th>Comptage</th>
+          </tr>
+        </thead>
+        <tbody>
+          {data.map((item, index) => (
+            <tr key={index}>
+              <td>
+                {item.statut}
+              </td>
+              <td>
+                {item.comptage}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+};
+
+export default StatusGrid;
+```
+Notez que ce code est juste un exemple et que vous devrez adapter le code à vos besoins spécifiques.

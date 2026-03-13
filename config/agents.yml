@@ -1,0 +1,318 @@
+# LaRuche Agent Configuration
+# Version: 3.1.0
+# Provider-agnostic multi-agent config
+
+version: "3.1"
+
+# ─────────────────────────────────────────────────────────────────────────────
+# PROVIDERS
+# All values can be overridden by environment variables.
+# ─────────────────────────────────────────────────────────────────────────────
+providers:
+  ollama:
+    host: "${OLLAMA_HOST:-http://localhost:11434}"
+    default_model: "${OLLAMA_MODEL_DEFAULT:-llama3.2:latest}"
+    timeout_ms: 60000
+    models:
+      strategist: "${OLLAMA_MODEL_STRATEGIST:-glm-4.6:cloud}"
+      architect:  "${OLLAMA_MODEL_ARCHITECT:-qwen3-coder:480b-cloud}"
+      worker:     "${OLLAMA_MODEL_WORKER:-llama3.2:3b}"
+      vision:     "${OLLAMA_MODEL_VISION:-llama3.2-vision:latest}"
+      vision_fast:"${OLLAMA_MODEL_VISION_FAST:-moondream:latest}"
+
+  anthropic:
+    api_key: "${ANTHROPIC_API_KEY}"
+    base_url: "https://api.anthropic.com/v1"
+    default_model: "claude-sonnet-4-20250514"
+    enabled: "${ANTHROPIC_ENABLED:-false}"
+    timeout_ms: 30000
+
+  openai:
+    api_key: "${OPENAI_API_KEY}"
+    base_url: "https://api.openai.com/v1"
+    default_model: "gpt-4o-mini"
+    enabled: "${OPENAI_ENABLED:-false}"
+    timeout_ms: 30000
+
+  kimi:
+    api_key: "${KIMI_API_KEY}"
+    base_url: "https://api.moonshot.cn/v1"
+    default_model: "moonshot-v1-8k"
+    enabled: "${KIMI_ENABLED:-false}"
+    timeout_ms: 45000
+
+  openrouter:
+    api_key: "${OPENROUTER_API_KEY}"
+    base_url: "https://openrouter.ai/api/v1"
+    default_model: "meta-llama/llama-3.2-3b-instruct"
+    enabled: "${OPENROUTER_ENABLED:-false}"
+    timeout_ms: 30000
+
+# ─────────────────────────────────────────────────────────────────────────────
+# TOOLS — mapping logical tool names → MCP servers or scripts
+# ─────────────────────────────────────────────────────────────────────────────
+tools:
+  # System / HID
+  hid.move:         { mcp: "mcp-os-control", fn: "moveMouse" }
+  hid.click:        { mcp: "mcp-os-control", fn: "click" }
+  hid.type:         { mcp: "mcp-os-control", fn: "typeText" }
+  hid.scroll:       { mcp: "mcp-os-control", fn: "scroll" }
+  hid.screenshot:   { mcp: "mcp-os-control", fn: "screenshot" }
+  hid.calibrate:    { mcp: "mcp-os-control", fn: "calibrate" }
+
+  # Vision
+  vision.analyze:   { mcp: "mcp-vision", fn: "analyzeScreen" }
+  vision.find:      { mcp: "mcp-vision", fn: "findElement" }
+  vision.cursor:    { mcp: "mcp-vision", fn: "identifyCursorTarget" }
+
+  # Terminal
+  terminal.run:     { mcp: "mcp-terminal", fn: "exec" }
+  terminal.safe:    { mcp: "mcp-terminal", fn: "execSafe" }
+  terminal.ps:      { mcp: "mcp-terminal", fn: "listProcesses" }
+
+  # Memory / Vault
+  vault.store:      { mcp: "mcp-vault", fn: "storeExperience" }
+  vault.search:     { mcp: "mcp-vault", fn: "findSimilar" }
+  vault.profile:    { mcp: "mcp-vault", fn: "getProfile" }
+  vault.rule:       { mcp: "mcp-vault", fn: "addRule" }
+
+  # Skills
+  skill.create:     { mcp: "mcp-skill-factory", fn: "createSkill" }
+  skill.evolve:     { mcp: "mcp-skill-factory", fn: "evolveSkill" }
+  skill.list:       { mcp: "mcp-skill-factory", fn: "listSkills" }
+
+  # Rollback / Safety
+  rollback.snap:    { mcp: "mcp-rollback", fn: "createSnapshot" }
+  rollback.list:    { mcp: "mcp-rollback", fn: "listSnapshots" }
+  rollback.restore: { mcp: "mcp-rollback", fn: "restore" }
+
+  # Janitor
+  janitor.purge:    { mcp: "mcp-janitor", fn: "purgeTemp" }
+  janitor.gc:       { mcp: "mcp-janitor", fn: "gcRAM" }
+  janitor.stats:    { mcp: "mcp-janitor", fn: "getStats" }
+
+  # Browser / OS macros (via mcp-browser)
+  os.openApp:                       { mcp: "mcp-browser", fn: "os.openApp" }
+  os.focusApp:                      { mcp: "mcp-browser", fn: "os.focusApp" }
+  browser.goto:                     { mcp: "mcp-browser", fn: "browser.goto" }
+  browser.typeInFocusedField:       { mcp: "mcp-browser", fn: "browser.typeInFocusedField" }
+  browser.pressEnter:               { mcp: "mcp-browser", fn: "browser.pressEnter" }
+  browser.searchYouTube:            { mcp: "mcp-browser", fn: "browser.searchYouTube" }
+  browser.clickFirstYoutubeResult:  { mcp: "mcp-browser", fn: "browser.clickFirstYoutubeResult" }
+  browser.pressKey:                 { mcp: "mcp-browser", fn: "browser.pressKey" }
+
+  # Playwright MCP
+  pw.launch:                        { mcp: "mcp-playwright", fn: "pw.launch" }
+  pw.goto:                          { mcp: "mcp-playwright", fn: "pw.goto" }
+  pw.click:                         { mcp: "mcp-playwright", fn: "pw.click" }
+  pw.fill:                          { mcp: "mcp-playwright", fn: "pw.fill" }
+  pw.press:                         { mcp: "mcp-playwright", fn: "pw.press" }
+  pw.waitFor:                       { mcp: "mcp-playwright", fn: "pw.waitFor" }
+  pw.extract:                       { mcp: "mcp-playwright", fn: "pw.extract" }
+  pw.screenshot:                    { mcp: "mcp-playwright", fn: "pw.screenshot" }
+  pw.evaluate:                      { mcp: "mcp-playwright", fn: "pw.evaluate" }
+  pw.getPageState:                  { mcp: "mcp-playwright", fn: "pw.getPageState" }
+  pw.searchYouTube:                 { mcp: "mcp-playwright", fn: "pw.searchYouTube" }
+  pw.clickFirstYoutubeResult:       { mcp: "mcp-playwright", fn: "pw.clickFirstYoutubeResult" }
+  pw.fillForm:                      { mcp: "mcp-playwright", fn: "pw.fillForm" }
+  pw.close:                         { mcp: "mcp-playwright", fn: "pw.close" }
+
+  # Future: low-level hardware (optional, loaded only if script exists)
+  # gpio.write:     { script: "scripts/gpio_write.py", args: [pin, value] }
+  # i2c.read:       { script: "scripts/i2c_read.py",  args: [addr, reg] }
+
+# ─────────────────────────────────────────────────────────────────────────────
+# AGENTS
+# ─────────────────────────────────────────────────────────────────────────────
+agents:
+  operator:
+    description: "Physical operator — HID, vision, app control"
+    soul: "workspace/agents/operator/AGENT.md"
+
+    llm:
+      primary:
+        provider: ollama
+        model: "${OLLAMA_MODEL_WORKER:-llama3.2:latest}"
+      fallback:
+        provider: ollama
+        model: "llama3.2:3b"
+      temperature: 0.2
+      top_p: 0.9
+      streaming: true
+      timeout_ms: 45000
+
+    loop:
+      max_iterations: 8
+      max_tool_calls: 20
+      hitl_threshold: 0.7       # probability above which HITL is triggered
+      batch_hid: true            # batch consecutive HID actions into macros
+      vision_limit: 3            # max screenshots per iteration
+      retry_on_error: 2
+
+    tools_allowed:
+      - hid.*
+      - vision.*
+      - terminal.safe
+      - vault.store
+      - vault.search
+      - janitor.*
+      - pw.*
+
+    tools_denied:
+      - terminal.run             # no unrestricted shell for operator
+      - rollback.restore         # operator can't restore snapshots
+
+    memory:
+      load_global: true
+      load_agent_specific: true
+      max_entries: 10
+      use_vector_search: false   # fast path for operator
+
+  devops:
+    description: "Infrastructure, scripts, logs, deployments"
+    soul: "workspace/agents/devops/AGENT.md"
+
+    llm:
+      primary:
+        provider: ollama
+        model: "${OLLAMA_MODEL_ARCHITECT:-qwen3-coder:480b-cloud}"
+      fallback:
+        provider: ollama
+        model: "llama3.2:latest"
+      temperature: 0.1
+      top_p: 0.95
+      streaming: true
+      timeout_ms: 60000
+
+    loop:
+      max_iterations: 15
+      max_tool_calls: 40
+      hitl_threshold: 0.5
+      batch_terminal: true       # batch terminal commands with &&
+      retry_on_error: 3
+
+    tools_allowed:
+      - terminal.*
+      - rollback.*
+      - janitor.*
+      - vault.*
+      - skill.list
+
+    tools_denied:
+      - hid.*
+      - vision.*
+
+    memory:
+      load_global: true
+      load_agent_specific: true
+      max_entries: 20
+      use_vector_search: true
+
+  builder:
+    description: "Code generation, project scaffolding, skill creation"
+    soul: "workspace/agents/builder/AGENT.md"
+
+    llm:
+      primary:
+        provider: ollama
+        model: "${OLLAMA_MODEL_ARCHITECT:-qwen3-coder:480b-cloud}"
+      fallback:
+        provider: ollama
+        model: "${OLLAMA_MODEL_STRATEGIST:-glm-4.6:cloud}"
+      temperature: 0.05          # very low for deterministic code
+      top_p: 0.95
+      streaming: true
+      timeout_ms: 120000         # builder needs more time
+
+    loop:
+      max_iterations: 20
+      max_tool_calls: 60
+      hitl_threshold: 0.3
+      chain_of_thought: true     # Draft → Critique → Refactor
+      retry_on_error: 2
+
+    tools_allowed:
+      - terminal.*
+      - skill.*
+      - vault.*
+      - rollback.snap
+      - rollback.list
+
+    tools_denied:
+      - hid.*
+      - vision.*
+      - rollback.restore         # builder can't restore without devops approval
+
+    memory:
+      load_global: true
+      load_agent_specific: true
+      max_entries: 30
+      use_vector_search: true
+
+  planner:
+    description: "Intent planner — transforms natural language into step-by-step skill plans"
+    soul: "workspace/agents/planner/AGENT.md"
+
+    llm:
+      primary:
+        provider: ollama
+        model: "${OLLAMA_MODEL_STRATEGIST:-glm-4.6:cloud}"
+      fallback:
+        provider: ollama
+        model: "${OLLAMA_MODEL_WORKER:-llama3.2:3b}"
+      temperature: 0.1           # très bas — JSON déterministe
+      top_p: 0.9
+      streaming: false           # pas besoin de streaming pour JSON
+      timeout_ms: 20000          # planner doit être rapide
+
+    loop:
+      max_iterations: 1          # un seul appel LLM — pas de boucle
+      max_tool_calls: 0          # planner ne manipule pas d'outils
+      hitl_threshold: 1.0        # jamais de HITL pour le planner
+      retry_on_error: 1
+
+    tools_allowed:
+      - vault.search             # peut chercher des expériences passées
+      - skill.list               # peut lister les skills disponibles
+
+    tools_denied:
+      - hid.*
+      - terminal.*
+      - rollback.*
+
+    memory:
+      load_global: true
+      load_agent_specific: false
+      max_entries: 5
+      use_vector_search: false
+
+# ─────────────────────────────────────────────────────────────────────────────
+# SWARM — how agents collaborate
+# ─────────────────────────────────────────────────────────────────────────────
+swarm:
+  orchestrator: "queen_oss"      # main orchestrator (queen_oss.js)
+  decomposition_model:
+    provider: ollama
+    model: "${OLLAMA_MODEL_STRATEGIST:-glm-4.6:cloud}"
+
+  routing:
+    # Keyword → agent mapping for quick routing
+    patterns:
+      - match: ["musique", "youtube", "safari", "ouvre", "lance", "joue", "mets"]
+        agent: planner
+      - match: ["clique", "ouvre", "tape", "écran", "souris", "HID"]
+        agent: operator
+      - match: ["déploie", "logs", "terminal", "git", "npm", "pip", "process"]
+        agent: devops
+      - match: ["génère", "code", "fonction", "module", "skill", "projet", "debug"]
+        agent: builder
+
+  # Default agent if no pattern matches
+  default_agent: devops
+
+  # Worker pool for parallel sub-tasks
+  worker_pool:
+    max_parallel: 10
+    model: "${OLLAMA_MODEL_WORKER:-llama3.2:3b}"
+    temperature: 0.0
+    timeout_ms: 30000

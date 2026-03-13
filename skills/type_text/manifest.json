@@ -1,0 +1,7 @@
+{
+  "name": "type_text",
+  "description": "Tape du texte dans le champ actif via AppleScript",
+  "version": "1.0.0",
+  "params": { "text": "string (requis)" },
+  "created": "2026-03-12T00:00:00.000Z"
+}
