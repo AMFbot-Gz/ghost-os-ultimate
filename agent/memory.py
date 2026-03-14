@@ -49,6 +49,9 @@ class Episode(BaseModel):
     model_used: str
     skills_used: List[str] = []
     learned: Optional[str] = None
+    # Identifiant de la machine sur laquelle la mission a été exécutée.
+    # Permet de filtrer et prioriser les souvenirs par machine.
+    machine_id: str = ""
 
 
 class WorldStateUpdate(BaseModel):
@@ -173,13 +176,26 @@ async def get_episodes(limit: int = 20):
 
 @app.post("/search")
 async def search_episodes(query: dict):
-    keywords = query.get("keywords", [])
-    results = []
+    keywords  = query.get("keywords", [])
+    machine   = query.get("machine_id", "")  # filtre optionnel par machine
+    results   = []
     for ep in _read_episodes_safe(EPISODE_FILE):
+        # Filtre machine_id si fourni
+        if machine and ep.get("machine_id", "") not in ("", machine):
+            continue
         text = (ep.get("mission", "") + ep.get("result", "") + ep.get("learned", "")).lower()
-        if any(k.lower() in text for k in keywords):
+        if not keywords or any(k.lower() in text for k in keywords):
             results.append(ep)
     return {"results": results[-10:]}
+
+
+@app.get("/episodes/by_machine/{machine_id}")
+async def get_episodes_by_machine(machine_id: str, limit: int = 20):
+    """Retourne les épisodes filtrés par machine_id (récents en premier)."""
+    async with _FILE_LOCK:
+        all_eps = _read_episodes_safe(EPISODE_FILE)
+    filtered = [ep for ep in all_eps if ep.get("machine_id", "") in ("", machine_id)]
+    return {"machine_id": machine_id, "episodes": list(reversed(filtered[-limit:]))}
 
 
 @app.get("/world")

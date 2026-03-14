@@ -81,14 +81,16 @@ setInterval(() => {
 }, 60_000).unref();
 
 /**
- * Crée une entrée de mission in-memory
- * Inclut timeoutAt pour le cleanup périodique (Wave 1 — timeout global missions)
+ * Crée une entrée de mission in-memory.
+ * @param {string} command
+ * @param {string} [machineId] - machine cible (défaut: MACHINE_ID env ou 'mac-local')
  */
-export function createMissionEntry(command) {
+export function createMissionEntry(command, machineId) {
   const id = `m-${Date.now()}-${randomUUID().slice(0, 8)}`;
   const entry = {
     id,
     command,
+    machine_id: machineId || process.env.MACHINE_ID || 'mac-local',
     status: "pending",
     result: null,
     error: null,
@@ -174,7 +176,9 @@ export function createMissionsRoutes(app, deps) {
       return c.json({ error: "Body JSON invalide" }, 400);
     }
 
-    const command = body?.command?.trim();
+    const command   = body?.command?.trim();
+    const machineId = body?.machine_id?.trim() || process.env.MACHINE_ID || 'mac-local';
+
     if (!command) {
       return c.json({ error: "Champ 'command' requis" }, 400);
     }
@@ -190,16 +194,16 @@ export function createMissionsRoutes(app, deps) {
       }, 503);
     }
 
-    const entry = createMissionEntry(command);
-    logger.info(`[API] Nouvelle mission ${entry.id}: ${command.substring(0, 60)}`);
-    broadcastHUD({ type: "mission_start", command: command.substring(0, 100), missionId: entry.id });
+    const entry = createMissionEntry(command, machineId);
+    logger.info(`[API] Nouvelle mission ${entry.id} [${machineId}]: ${command.substring(0, 60)}`);
+    broadcastHUD({ type: "mission_start", command: command.substring(0, 100), missionId: entry.id, machine_id: machineId });
 
     // Passage par la queue FIFO — la mission s'exécutera dès qu'un slot sera disponible
-    missionQueue.enqueue(() => runMission(command, entry.id)).catch((err) => {
+    missionQueue.enqueue(() => runMission(command, entry.id, machineId)).catch((err) => {
       logger.error(`[API] Mission ${entry.id} erreur: ${err.message}`);
     });
 
-    return c.json({ missionId: entry.id, status: "pending", queue: missionQueue.stats }, 202);
+    return c.json({ missionId: entry.id, machine_id: machineId, status: "pending", queue: missionQueue.stats }, 202);
   });
 
   // ─── GET /api/missions ──────────────────────────────────────────────────────
@@ -818,5 +822,57 @@ export function createMissionsRoutes(app, deps) {
       }
       return c.json({ error: e.message }, 500);
     }
+  });
+
+  // ─── MACHINES ─────────────────────────────────────────────────────────────────
+
+  /** Liste toutes les machines enregistrées avec leur profil */
+  app.get('/api/machines', async (c) => {
+    const { listMachineProfiles } = await import('../computer_use/machine_registry.js');
+    return c.json({ machines: listMachineProfiles() });
+  });
+
+  /** Profil d'une machine spécifique */
+  app.get('/api/machines/:id', async (c) => {
+    const { getMachineProfile } = await import('../computer_use/machine_registry.js');
+    const profile = getMachineProfile(c.req.param('id'));
+    return c.json(profile);
+  });
+
+  /** Enregistrement / mise à jour d'une machine (utilisé par le daemon au démarrage) */
+  app.post('/api/machines/register', async (c) => {
+    let body; try { body = await c.req.json(); } catch { return c.json({ error: 'Body invalide' }, 400); }
+    const { machine_id, platform, daemon_url, daemon_port, label } = body;
+    if (!machine_id) return c.json({ error: 'machine_id requis' }, 400);
+    const { updateMachineProfile } = await import('../computer_use/machine_registry.js');
+    const { resetAdapter }         = await import('../computer_use/adapter.js');
+    resetAdapter(machine_id); // invalide le cache adapter si l'URL a changé
+    const profile = updateMachineProfile(machine_id, {
+      platform:    platform  || process.platform,
+      daemon_url:  daemon_url  || `http://localhost:${daemon_port || 9000}`,
+      daemon_port: daemon_port || 9000,
+      label:       label       || machine_id,
+      last_seen:   new Date().toISOString(),
+    });
+    logger.info(`[Machines] ${machine_id} enregistré — ${profile.daemon_url}`);
+    return c.json({ success: true, profile });
+  });
+
+  /** Health check d'une machine via son daemon */
+  app.get('/api/machines/:id/health', async (c) => {
+    const { getAdapter } = await import('../computer_use/adapter.js');
+    const adapter = getAdapter(c.req.param('id'));
+    const result  = await adapter.health();
+    return c.json(result, result.success ? 200 : 503);
+  });
+
+  /** Missions filtrées par machine */
+  app.get('/api/machines/:id/missions', (c) => {
+    const machineId = c.req.param('id');
+    const all = loadMissions().filter(m => m.machine_id === machineId);
+    // Inclut aussi les missions actives
+    const active = [...activeMissions.values()].filter(m => m.machine_id === machineId);
+    const merged = [...active, ...all.filter(m => !activeMissions.has(m.id))];
+    return c.json({ machine_id: machineId, total: merged.length, missions: merged });
   });
 }

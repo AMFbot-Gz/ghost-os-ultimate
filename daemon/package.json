@@ -1,0 +1,19 @@
+{
+  "name": "ghost-daemon",
+  "version": "1.0.0",
+  "description": "Ghost Computer-Use Daemon — à déployer sur chaque machine à contrôler",
+  "type": "module",
+  "main": "ghost_daemon.js",
+  "scripts": {
+    "start":   "node ghost_daemon.js",
+    "stub":    "DAEMON_IMPL=stub node ghost_daemon.js",
+    "macos":   "DAEMON_IMPL=macos node ghost_daemon.js",
+    "linux":   "DAEMON_IMPL=linux node ghost_daemon.js",
+    "windows": "DAEMON_IMPL=windows node ghost_daemon.js"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "keywords": ["ghost-os", "computer-use", "daemon", "automation"],
+  "license": "MIT"
+}

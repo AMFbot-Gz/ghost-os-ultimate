@@ -3,7 +3,8 @@
 # Usage : make <cible>
 # ============================================================
 
-.PHONY: start stop status test test-python preflight install logs clean help
+.PHONY: start stop status test test-python preflight install logs clean help \
+        core-only daemon daemon-stub daemon-stop test-adapter machines
 
 # Valeurs par défaut
 PYTHON    := python3
@@ -59,6 +60,42 @@ clean:
 		echo "Logs supprimés."; \
 	fi
 	@echo "Nettoyage terminé."
+
+# ------------------------------------------------------------
+# Multi-machine — Ghost Daemon
+# ------------------------------------------------------------
+
+## Lance uniquement le cœur agentique Node.js (sans les couches Python)
+core-only:
+	STANDALONE_MODE=true GHOST_OS_MODE=ultimate node src/queen_oss.js
+
+## Lance le daemon Ghost sur cette machine (implémentation macOS)
+daemon:
+	DAEMON_IMPL=macos \
+	MACHINE_ID=$${MACHINE_ID:-mac-local} \
+	DAEMON_PORT=$${DAEMON_PORT:-9000} \
+	node daemon/ghost_daemon.js
+
+## Lance le daemon en mode stub (test / CI sans vrai OS)
+daemon-stub:
+	DAEMON_IMPL=stub \
+	MACHINE_ID=$${MACHINE_ID:-stub-machine} \
+	DAEMON_PORT=$${DAEMON_PORT:-9001} \
+	node daemon/ghost_daemon.js
+
+## Arrête le daemon Ghost (cherche le process sur DAEMON_PORT)
+daemon-stop:
+	@lsof -ti:$${DAEMON_PORT:-9000} | xargs kill -9 2>/dev/null && echo "Daemon arrêté." || echo "Aucun daemon trouvé."
+
+## Lance uniquement les tests ComputerUseAdapter
+test-adapter:
+	npx jest tests/jest/unit/computerUseAdapter.test.js --no-coverage
+
+## Liste les machines connues du Core
+machines:
+	@curl -s http://localhost:3000/api/machines \
+	  -H "Authorization: Bearer $${CHIMERA_SECRET}" | python3 -m json.tool 2>/dev/null || \
+	  echo "Ghost Core inaccessible (http://localhost:3000)"
 
 # ------------------------------------------------------------
 # Aide
