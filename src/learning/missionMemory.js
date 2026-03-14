@@ -416,6 +416,36 @@ export function memoryStats() {
 }
 
 /**
+ * Retourne un hint heuristique pour le planner basé sur les routes apprises.
+ * Cherche la route avec le plus de hits et une similarité ≥ 0.5.
+ * @param {string} intent - l'intention à matcher
+ * @returns {{when: string, then: string, confidence: number}|null}
+ */
+export function getHeuristicHint(intent) {
+  const routes = loadRoutes();
+  if (!routes.length) return null;
+  const norm = intent.toLowerCase().trim();
+  let best = null;
+  let bestScore = 0;
+  for (const r of routes) {
+    const sim = similarity(r.normalizedCommand || '', norm);
+    // Pondère par les hits pour favoriser les routes validées
+    const score = sim * (1 + Math.log1p(r.hits || 0) * 0.1);
+    if (score > bestScore && sim >= 0.5) {
+      bestScore = score;
+      best = r;
+    }
+  }
+  if (!best) return null;
+  const skillChain = (best.steps || []).map(s => s.skill).join(' → ');
+  return {
+    when: (best.originalCommand || best.normalizedCommand || '').slice(0, 80),
+    then: skillChain || 'steps mémorisés',
+    confidence: Math.min(0.99, bestScore),
+  };
+}
+
+/**
  * Supprime une route (pour les corrections manuelles)
  */
 export function forget(command) {
