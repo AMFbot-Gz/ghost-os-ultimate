@@ -1,10 +1,10 @@
 /**
- * tests/skills/automatise_l_organisation_des_t_l_charge.test.js — Ghost OS v7 Unit Tests
+ * tests/skills/organise_screenshots.test.js — Ghost OS v7 Unit Tests
  * Vérifie: succès, timing osascript <100ms (cache), erreur gracieuse
  */
-import { execute } from "../../skills/automatise_l_organisation_des_t_l_charge/index.js";
+import { execute } from "../../skills/organise_screenshots/index.js";
 
-describe("Skill: automatise_l_organisation_des_t_l_charge", () => {
+describe("Skill: organise_screenshots", () => {
   test("execute() retourne un objet avec success", async () => {
     const result = await execute({});
     expect(result).toHaveProperty("success");

@@ -8,7 +8,12 @@
  */
 
 import { UniversalConsciousness } from '../../core/consciousness/universal_consciousness.js';
-import { NeuralEventBus }         from '../../core/consciousness/neural_event_bus.js';
+// ARCHITECTURE (tâche #13) :
+//   On importe le singleton NeuralEventBus depuis core/events/event_bus.js
+//   au lieu d'en créer une nouvelle instance locale. Cela garantit que ce bus
+//   est identique à celui utilisé par queen_oss.js : la conscience universelle
+//   reçoit donc bien tous les événements émis par la Queen Node.js.
+import eventBus                   from '../../core/events/event_bus.js';
 import { EpisodicMemorySystem }   from '../../core/consciousness/episodic_memory_system.js';
 import { StrategistAgent }        from '../../core/agents/strategist_agent.js';
 
@@ -40,7 +45,7 @@ export class UltimateMode {
     ];
 
     this._active      = false;
-    this.event_bus    = new NeuralEventBus();
+    this.event_bus    = eventBus;  // Singleton partagé avec queen_oss.js
     this.memory       = new EpisodicMemorySystem({ max: 10_000 });
     this.strategist   = new StrategistAgent(this.event_bus, this.memory);
     this.consciousness = new UniversalConsciousness({

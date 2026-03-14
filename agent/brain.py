@@ -30,6 +30,39 @@ MODELS = CONFIG["ollama"]["models"]
 COMPRESS_THRESHOLD = CONFIG["brain"]["compress_threshold"]
 CLAUDE_MODEL = "claude-opus-4-6"
 
+# ─── Provider-agnostic model config (format vendor/model, inspiré PicoClaw) ──
+GHOST_MODEL = os.environ.get('GHOST_MODEL', '')  # ex: 'anthropic/claude-opus-4-6'
+
+
+def parse_model_spec(spec: str) -> dict:
+    """Parse un spec 'vendor/model' → {'vendor': str, 'model': str, 'api_base': str|None}.
+
+    Exemples:
+      'anthropic/claude-opus-4-6'  → vendor=anthropic
+      'ollama/llama3'              → vendor=ollama
+      'openai/gpt-4'               → vendor=openai
+      'llama3'                     → vendor=ollama (défaut local)
+    """
+    if '/' in spec:
+        vendor, model = spec.split('/', 1)
+    else:
+        vendor, model = 'ollama', spec  # défaut local
+
+    api_bases = {
+        'anthropic': None,  # SDK natif
+        'ollama':    os.environ.get('OLLAMA_HOST', 'http://localhost:11434'),
+        'openai':    'https://api.openai.com/v1',
+        'groq':      'https://api.groq.com/openai/v1',
+        'deepseek':  'https://api.deepseek.com/v1',
+        'kimi':      'https://api.moonshot.cn/v1',
+    }
+
+    return {
+        'vendor':   vendor.lower(),
+        'model':    model,
+        'api_base': api_bases.get(vendor.lower()),
+    }
+
 # Circuit breaker : compte les échecs consécutifs par provider
 _provider_failures: dict = {"claude": 0, "kimi": 0, "openai": 0, "ollama": 0, "mlx": 0}
 _PROVIDER_MAX_FAILURES = 3   # après 3 échecs consécutifs, on skip ce provider
@@ -154,8 +187,58 @@ async def llm(role: str, messages: list, system: str = "") -> dict:
     Routing LLM avec circuit breaker par provider.
     Claude API prioritaire — Kimi → OpenAI en fallback.
     Un provider est mis en pause après _PROVIDER_MAX_FAILURES échecs consécutifs.
+    Si GHOST_MODEL est défini (format vendor/model), il override le routing.
     """
-    global _circuit_reset_count
+    global _circuit_reset_count, CLAUDE_MODEL
+
+    # ─── Override via GHOST_MODEL (ex: 'anthropic/claude-opus-4-6') ───────────
+    _ghost_vendor: str | None = None
+    _ghost_model: str | None = None
+    if GHOST_MODEL:
+        _spec = parse_model_spec(GHOST_MODEL)
+        _ghost_vendor = _spec['vendor']
+        _ghost_model = _spec['model']
+        print(f"[Brain] GHOST_MODEL override → vendor={_ghost_vendor}, model={_ghost_model}")
+
+        if _ghost_vendor == 'anthropic':
+            # Rediriger vers Claude avec le modèle spécifié
+            _orig_claude_model = CLAUDE_MODEL
+            CLAUDE_MODEL = _ghost_model
+            try:
+                content = await call_claude(messages, system)
+                _provider_failures['claude'] = 0
+                return {'content': content, 'provider': 'claude', 'model': CLAUDE_MODEL}
+            except Exception as e:
+                _provider_failures['claude'] = _provider_failures.get('claude', 0) + 1
+                print(f"[Brain] GHOST_MODEL claude override failed: {e}")
+            finally:
+                CLAUDE_MODEL = _orig_claude_model
+        elif _ghost_vendor == 'ollama':
+            try:
+                content = await call_ollama(_ghost_model, messages, system)
+                _provider_failures['ollama'] = 0
+                return {'content': content, 'provider': 'ollama', 'model': _ghost_model}
+            except Exception as e:
+                _provider_failures['ollama'] = _provider_failures.get('ollama', 0) + 1
+                print(f"[Brain] GHOST_MODEL ollama override failed: {e}")
+        elif _ghost_vendor == 'openai':
+            try:
+                content = await call_openai(messages, system)
+                _provider_failures['openai'] = 0
+                return {'content': content, 'provider': 'openai', 'model': _ghost_model}
+            except Exception as e:
+                _provider_failures['openai'] = _provider_failures.get('openai', 0) + 1
+                print(f"[Brain] GHOST_MODEL openai override failed: {e}")
+        elif _ghost_vendor == 'kimi':
+            try:
+                content = await call_kimi(messages, system)
+                _provider_failures['kimi'] = 0
+                return {'content': content, 'provider': 'kimi', 'model': _ghost_model}
+            except Exception as e:
+                _provider_failures['kimi'] = _provider_failures.get('kimi', 0) + 1
+                print(f"[Brain] GHOST_MODEL kimi override failed: {e}")
+        # Si l'override échoue, on continue avec le routing normal ci-dessous
+    # ─────────────────────────────────────────────────────────────────────────
 
     providers_tried = 0
 

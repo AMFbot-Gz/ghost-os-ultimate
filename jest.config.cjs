@@ -1,8 +1,9 @@
 module.exports = {
   testEnvironment: "node",
   testMatch: [
-    "**/test/unit/**/*.jest.test.js",
-    "**/test/integration/**/*.test.js",
+    "**/tests/jest/unit/**/*.jest.test.js",
+    "**/tests/jest/unit/**/*.test.js",
+    "**/tests/jest/integration/**/*.test.js",
   ],
   transform: {},
   moduleNameMapper: {

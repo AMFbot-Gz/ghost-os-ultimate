@@ -181,6 +181,7 @@ mkdir skills/mon_skill
 - pyautogui FAILSAFE actif (coin haut-gauche = arrêt)
 - Chimera Bus signé HMAC-SHA256
 - Sandbox timeout max 30s, output tronqué à 10k chars
+- **Routes /api/* protégées par Bearer token** : toutes les requêtes vers `/api/*` nécessitent le header `Authorization: Bearer <CHIMERA_SECRET>` (sauf `/api/health`, `/health`, `/mcp/health` qui restent publiques). En mode dev (CHIMERA_SECRET absent ou valeur par défaut), le middleware laisse passer avec un warning.
 
 ## Stack
 - **Node.js** 20+ (ESM), Hono + WebSocket, Telegraf, PM2

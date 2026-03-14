@@ -7,6 +7,7 @@ import httpx
 import json
 import os
 import sqlite3
+import tempfile
 import time
 import uuid
 from datetime import datetime, timezone
@@ -58,6 +59,29 @@ _vital_loop_cycle  = 0          # compteur de cycles pour le heartbeat mémoire 
 _active_missions   = 0          # missions en cours — utilisé par layer_manager pour bloquer l'hibernation
 _active_vital_missions: set = set()   # actions vitales en cours (anti-avalanche fire-and-forget)
 _anomaly_cooldown: dict = {}           # {action_key: last_ts} — cooldown 5min par type d'anomalie
+
+
+# ─── Écriture atomique JSON (fix #14) ──────────────────────────────────────────
+def atomic_write_json(filepath: str, data) -> None:
+    """Écriture atomique JSON via fichier temp + rename (évite corruption).
+
+    Utilise tempfile.mkstemp dans le même répertoire que la cible pour garantir
+    que le rename est atomique (même device/filesystem). En cas d'erreur, le
+    fichier temporaire est supprimé et l'exception est propagée.
+    """
+    dir_path = os.path.dirname(os.path.abspath(filepath))
+    fd, tmp_path = tempfile.mkstemp(dir=dir_path, suffix='.tmp')
+    try:
+        with os.fdopen(fd, 'w', encoding='utf-8') as f:
+            json.dump(data, f, ensure_ascii=False, indent=2)
+        os.replace(tmp_path, filepath)  # atomique sur POSIX
+    except Exception:
+        try:
+            os.unlink(tmp_path)
+        except OSError:
+            pass
+        raise
+
 
 # ─── HITL Queue ────────────────────────────────────────────────────────────────
 # Structure : { hitl_id: { "action": str, "mission_id": str, "timestamp": datetime,
@@ -290,6 +314,12 @@ async def _execute_hitl_subtask(entry: dict):
 
 async def telegram_polling_loop():
     """Boucle de polling Telegram — long-polling 25s (0 latence, 0 CPU idle). P0.3."""
+    # Guard anti-409 : n'activer le polling Python que si TELEGRAM_MODE=python
+    TELEGRAM_MODE = os.environ.get("TELEGRAM_MODE", "node")
+    if TELEGRAM_MODE not in ("python",):
+        print(f"[Queen] Telegram géré par Node.js (TELEGRAM_MODE={TELEGRAM_MODE}) — handler Python désactivé")
+        return
+
     token = os.environ.get("TELEGRAM_BOT_TOKEN", "")
     admin_id = os.environ.get("ADMIN_TELEGRAM_ID", "")
     if not token or not admin_id:
@@ -1022,5 +1052,18 @@ async def health():
 
 
 if __name__ == "__main__":
+    import sys
     import uvicorn
+
+    # Validation sécurité CHIMERA_SECRET
+    _chimera         = os.environ.get("CHIMERA_SECRET", "")
+    _chimera_default = "pico-ruche-dev-secret-changez-moi"
+    if not _chimera or _chimera == _chimera_default:
+        if os.environ.get("NODE_ENV") == "production":
+            print("[Queen] ❌ CHIMERA_SECRET non défini ou valeur par défaut — refus de démarrer en production.")
+            print("[Queen]    Générer avec : openssl rand -hex 32")
+            sys.exit(1)
+        else:
+            print("[Queen] ⚠️  CHIMERA_SECRET non configuré — mode dev uniquement.")
+
     uvicorn.run(app, host="0.0.0.0", port=PORTS["queen"])

@@ -1,5 +1,23 @@
-// core/events/event_bus.js — Bus d'événements central PICO-RUCHE
+/**
+ * core/events/event_bus.js — Bus d'événements central Ghost OS Ultimate
+ *
+ * ARCHITECTURE (tâche #13) :
+ *   Ce module exporte désormais un singleton de NeuralEventBus comme bus unique
+ *   partagé entre la Queen Node.js (queen_oss.js) et le mode Ultime
+ *   (runtime/modes/ultimate_mode.js). Cela garantit que la conscience universelle
+ *   reçoit bien tous les événements émis par la Queen.
+ *
+ *   Compatibilité ascendante assurée : les appels .emit(), .on(), .off() existants
+ *   dans queen_oss.js continuent de fonctionner sans modification.
+ *
+ *   L'ancienne classe EventBus (wrapper EventEmitter) est conservée pour référence
+ *   mais n'est plus instanciée comme singleton principal.
+ */
+
 import { EventEmitter } from 'events';
+import { NeuralEventBus } from '../consciousness/neural_event_bus.js';
+
+// ─── Ancienne classe EventBus (conservée pour compatibilité de type) ──────────
 
 export class EventBus extends EventEmitter {
   constructor() {
@@ -52,5 +70,14 @@ export class EventBus extends EventEmitter {
   }
 }
 
-export const eventBus = new EventBus();
+// ─── Singleton partagé ────────────────────────────────────────────────────────
+//
+// On utilise directement une instance de NeuralEventBus comme singleton unique.
+// NeuralEventBus expose la même API que EventBus (.emit, .on, .off, .use,
+// .getMetrics) donc queen_oss.js n'a pas besoin d'être modifié.
+//
+// UltimateMode importe ce même singleton au lieu de créer sa propre instance,
+// ce qui relie la conscience universelle aux événements de la Queen.
+
+export const eventBus = new NeuralEventBus();
 export default eventBus;

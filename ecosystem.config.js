@@ -23,7 +23,7 @@ export default {
   apps: [
     // ── Core (always started) ───────────────────────────────────────────────
     {
-      name: "laruche-queen",
+      name: "ghost-queen",
       script: "src/queen_oss.js",            // ← canonical entry point
       watch: false,
       restart_delay: 3000,
@@ -59,7 +59,7 @@ export default {
       merge_logs: true,
     },
     {
-      name: "laruche-watcher",
+      name: "ghost-watcher",
       script: "src/watcher.js",
       max_memory_restart: mem.watcher,
       log_file: ".laruche/logs/watcher.log",
@@ -68,8 +68,8 @@ export default {
     },
     // ── Dashboard (started unless --headless) ───────────────────────────────
     {
-      name: "laruche-dashboard",
-      script: "dashboard/server.js",
+      name: "ghost-dashboard",
+      script: "interfaces/dashboard/server.js",
       max_memory_restart: mem.dashboard,
       env_production: { NODE_ENV: "production", LARUCHE_MODE: MODE },
       log_file: ".laruche/logs/dashboard.log",
@@ -78,8 +78,8 @@ export default {
     },
     // ── HUD Electron (started only with --full) ─────────────────────────────
     {
-      name: "laruche-hud",
-      script: "hud/main.js",
+      name: "ghost-hud",
+      script: "interfaces/hud/main.js",
       interpreter: "electron",
       max_memory_restart: mem.hud,
       log_file: ".laruche/logs/hud.log",

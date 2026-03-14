@@ -6,9 +6,8 @@
  * Compatible avec le format manifest.json des skills PICO-RUCHE/LaRuche.
  */
 
-import { readFileSync, writeFileSync, readdirSync, existsSync, mkdirSync, cpSync } from 'fs';
-import { join, basename } from 'path';
-import { execSync } from 'child_process';
+import { readFileSync, writeFileSync, readdirSync, existsSync, mkdirSync, cpSync, rmSync, renameSync } from 'fs';
+import { join, basename, resolve } from 'path';
 
 const REGISTRY_FILE = '.laruche/registry.json';
 
@@ -70,9 +69,18 @@ export class SkillsMarketplace {
       return { success: false, errors: validation.errors };
     }
 
-    // Vérifie si déjà installé
+    // Vérifie si déjà installé — compare les versions semver
     if (this._isInstalled(skill_id)) {
-      return { success: true, message: `${skill_id} déjà installé`, skipped: true };
+      const installed_version = this._installedVersion(skill_id);
+      const target_version    = source ? this._sourceVersion(source) : null;
+
+      // Pas de version cible connue OU version identique/inférieure → skip
+      if (!target_version || !this._versionGt(target_version, installed_version)) {
+        return { success: true, message: `${skill_id} v${installed_version} déjà installé`, skipped: true };
+      }
+
+      // Version cible supérieure → upgrade automatique
+      return this.upgrade(skill_id, source, { from: installed_version, to: target_version });
     }
 
     const target_dir = join(this.skills_dir, skill_id);
@@ -102,14 +110,76 @@ export class SkillsMarketplace {
     }
   }
 
+  // ─── Mise à jour semver ────────────────────────────────────────────────────
+
+  async upgrade(skill_id, source = null, versions = null) {
+    if (!this._isInstalled(skill_id)) {
+      return this.install(skill_id, source);
+    }
+
+    const from_version = versions?.from || this._installedVersion(skill_id);
+    const skill_dir    = join(this.skills_dir, skill_id);
+    const backup_dir   = join(this.skills_dir, `${skill_id}.bak`);
+
+    try {
+      // 1. Backup de la version actuelle
+      if (existsSync(backup_dir)) rmSync(backup_dir, { recursive: true, force: true });
+      cpSync(skill_dir, backup_dir, { recursive: true });
+
+      // 2. Supprimer l'ancienne version
+      rmSync(skill_dir, { recursive: true, force: true });
+
+      // 3. Installer la nouvelle version
+      if (source && existsSync(source)) {
+        mkdirSync(skill_dir, { recursive: true });
+        cpSync(source, skill_dir, { recursive: true });
+      } else {
+        // Stub marketplace — même logique que install()
+        mkdirSync(skill_dir, { recursive: true });
+        const new_version = versions?.to || '0.0.2';
+        writeFileSync(join(skill_dir, 'manifest.json'), JSON.stringify({
+          name: skill_id, version: new_version, description: 'Skill mis à jour depuis marketplace',
+        }, null, 2));
+        writeFileSync(join(skill_dir, 'skill.js'),
+          `export async function run(params) {\n  return { success: true, skill: '${skill_id}', version: '${new_version}' };\n}\n`
+        );
+      }
+
+      // 4. Mettre à jour le registry
+      const to_version = this._installedVersion(skill_id);
+      this._addToRegistry(skill_id);
+
+      // 5. Supprimer le backup si succès
+      rmSync(backup_dir, { recursive: true, force: true });
+
+      return { success: true, skill: skill_id, upgraded: true, from: from_version, to: to_version };
+    } catch (err) {
+      // Rollback : restaurer depuis le backup
+      if (existsSync(backup_dir)) {
+        try {
+          if (existsSync(skill_dir)) rmSync(skill_dir, { recursive: true, force: true });
+          renameSync(backup_dir, skill_dir);
+        } catch { /* rollback partiel */ }
+      }
+      return { success: false, skill: skill_id, error: `Upgrade échoué (rollback effectué): ${err.message}` };
+    }
+  }
+
   uninstall(skill_id) {
-    const skill_dir = join(this.skills_dir, skill_id);
+    // Vérification anti-path-traversal : le chemin canonique doit être
+    // un sous-répertoire direct de skills_dir
+    const allowed_root = resolve(this.skills_dir);
+    const skill_dir    = resolve(join(this.skills_dir, skill_id));
+
+    if (!skill_dir.startsWith(allowed_root + '/') || skill_dir === allowed_root) {
+      return { success: false, error: `Chemin non autorisé: ${skill_id}` };
+    }
     if (!existsSync(skill_dir)) {
       return { success: false, error: `Skill ${skill_id} non trouvé` };
     }
 
     try {
-      execSync(`rm -rf "${skill_dir}"`, { timeout: 10_000 });
+      rmSync(skill_dir, { recursive: true, force: true });
       this._removeFromRegistry(skill_id);
       return { success: true, skill: skill_id };
     } catch (err) {
@@ -205,6 +275,56 @@ export class SkillsMarketplace {
     return existsSync(join(this.skills_dir, name));
   }
 
+  // Lit la version du skill installé depuis manifest.json ou manifest.yaml
+  _installedVersion(skill_id) {
+    const dir = join(this.skills_dir, skill_id);
+    // Essai manifest.json en premier
+    const json_path = join(dir, 'manifest.json');
+    if (existsSync(json_path)) {
+      try {
+        const m = JSON.parse(readFileSync(json_path, 'utf-8'));
+        return m.version || '0.0.0';
+      } catch { /* ignoré */ }
+    }
+    // Fallback manifest.yaml — extraction par regex
+    const yaml_path = join(dir, 'manifest.yaml');
+    if (existsSync(yaml_path)) {
+      const content = readFileSync(yaml_path, 'utf-8');
+      const match = content.match(/version:\s+['"]?(\d+\.\d+\.\d+)['"]?/);
+      return match ? match[1] : '0.0.0';
+    }
+    return '0.0.0';
+  }
+
+  // Lit la version d'une source locale (avant installation)
+  _sourceVersion(source) {
+    const json_path = join(source, 'manifest.json');
+    if (existsSync(json_path)) {
+      try {
+        const m = JSON.parse(readFileSync(json_path, 'utf-8'));
+        return m.version || null;
+      } catch { return null; }
+    }
+    const yaml_path = join(source, 'manifest.yaml');
+    if (existsSync(yaml_path)) {
+      const content = readFileSync(yaml_path, 'utf-8');
+      const match = content.match(/version:\s+['"]?(\d+\.\d+\.\d+)['"]?/);
+      return match ? match[1] : null;
+    }
+    return null;
+  }
+
+  // Retourne true si v1 > v2 (comparaison semver stricte)
+  _versionGt(v1, v2) {
+    const p1 = (v1 || '0.0.0').split('.').map(Number);
+    const p2 = (v2 || '0.0.0').split('.').map(Number);
+    for (let i = 0; i < 3; i++) {
+      if ((p1[i] || 0) > (p2[i] || 0)) return true;
+      if ((p1[i] || 0) < (p2[i] || 0)) return false;
+    }
+    return false; // égaux → pas supérieur
+  }
+
   _versionGte(v1, v2) {
     const p1 = (v1 || '0.0.0').split('.').map(Number);
     const p2 = (v2 || '0.0.0').split('.').map(Number);
@@ -218,11 +338,15 @@ export class SkillsMarketplace {
 
 // ─── SkillValidator ─────────────────────────────────────────────────────────
 
+const SKILL_NAME_MAX_LENGTH = 40;
+
 class SkillValidator {
   validate(skill) {
     const errors = [];
     if (!skill.name || !/^[a-z0-9_]+$/.test(skill.name)) {
       errors.push('name doit être snake_case alphanumérique');
+    } else if (skill.name.length > SKILL_NAME_MAX_LENGTH) {
+      errors.push(`name trop long (${skill.name.length} chars) — max ${SKILL_NAME_MAX_LENGTH} caractères`);
     }
     return { valid: errors.length === 0, errors };
   }

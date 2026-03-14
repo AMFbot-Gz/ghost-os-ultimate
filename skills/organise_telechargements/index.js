@@ -1,5 +1,5 @@
 /**
- * automatise_l_organisation_des_t_l_charge/index.js — Ghost OS v7 Runtime Interface
+ * organise_telechargements/index.js — Ghost OS v7 Runtime Interface
  * Bridge entre execute(params) et toolRouter + World Model check
  */
 import { createHash } from "crypto";
@@ -70,7 +70,7 @@ export async function execute(params = {}) {
     return final;
   } catch (err) {
     const duration_ms = Date.now() - start;
-    await reportFailure("automatise_l_organisation_des_t_l_charge", err, params);
+    await reportFailure("organise_telechargements", err, params);
     return { success: false, error: err.message, duration_ms };
   }
 }

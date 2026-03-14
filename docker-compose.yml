@@ -1,0 +1,69 @@
+version: "3.9"
+
+# Profiles disponibles:
+#   docker-compose up                          → agent seul (mode autonome)
+#   docker-compose --profile full up          → + dashboard React
+#   TELEGRAM_MODE=python docker-compose up    → mode gateway (webhook Telegram Python)
+
+services:
+  # ─── Ghost OS Ultimate (Queen Node.js + 7 couches Python) ──────────────────
+  ghost-os:
+    build:
+      context: .
+      dockerfile: runtime/deployment/docker/Dockerfile
+    container_name: ghost-os-ultimate
+    restart: unless-stopped
+    ports:
+      - "3000:3000"    # Queen Node.js API
+      - "8001:8001"    # Python Queen (missions, HITL)
+      - "8002:8002"    # Perception
+      - "8003:8003"    # Brain (LLM)
+      - "8004:8004"    # Executor
+      - "8005:8005"    # Evolution
+      - "8006:8006"    # Memory
+      - "8007:8007"    # MCP Bridge
+      - "9001:9001"    # HUD WebSocket
+    volumes:
+      - ghost_data:/app/.laruche
+      - ghost_memory:/app/agent/memory
+    environment:
+      - NODE_ENV=production
+      - STANDALONE_MODE=true
+      - GHOST_OS_MODE=ultimate
+      - OLLAMA_HOST=http://host.docker.internal:11434
+      - HITL_TIMEOUT_SECONDS=120
+      # Obligatoire — définir dans .env ou docker-compose.override.yml
+      - CHIMERA_SECRET=${CHIMERA_SECRET}
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN:-}
+      - ADMIN_TELEGRAM_ID=${ADMIN_TELEGRAM_ID:-}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+      - TELEGRAM_MODE=${TELEGRAM_MODE:-node}
+      - GHOST_MODEL=${GHOST_MODEL:-ollama/llama3}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 45s
+
+  # ─── Dashboard React (optionnel) ────────────────────────────────────────────
+  ghost-dashboard:
+    build:
+      context: interfaces/dashboard
+      dockerfile: ../../runtime/deployment/docker/Dockerfile.dashboard
+    container_name: ghost-dashboard
+    restart: unless-stopped
+    ports:
+      - "5173:5173"
+    environment:
+      - VITE_API_URL=http://localhost:3000
+    profiles:
+      - full   # Démarré uniquement avec: docker-compose --profile full up
+
+volumes:
+  ghost_data:
+    name: ghost-os-data
+  ghost_memory:
+    name: ghost-os-memory

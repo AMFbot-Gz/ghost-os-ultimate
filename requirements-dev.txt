@@ -1,0 +1,24 @@
+# Ghost OS Ultimate — Dépendances DEV/ML (installation ~15-30 min)
+# Inclut torch, sentence-transformers, Whisper, Vosk, Playwright.
+# Uniquement nécessaire pour: recherche, voix, embeddings, E2E tests.
+#
+# Installation: pip install -r requirements-dev.txt
+
+# Inclure le runtime de base
+-r requirements-runtime.txt
+
+# ─── Machine Learning / embeddings ──────────────────────────────────────────
+torch>=2.0.0
+sentence-transformers>=2.7.0
+scikit-learn>=1.3.0
+numpy>=1.24.0
+chromadb>=0.5.0
+
+# ─── Voix (désactivé par défaut — VOICE_ENABLED=false) ───────────────────────
+faster-whisper>=1.0.0
+sounddevice>=0.4.6
+vosk>=0.3.44
+pyttsx3>=2.99
+
+# ─── Automatisation navigateur ───────────────────────────────────────────────
+playwright>=1.40.0

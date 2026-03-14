@@ -1,5 +1,5 @@
 /**
- * organise_les_screenshots_par_date_et_les/index.js — Ghost OS v7 Runtime Interface
+ * organise_screenshots/index.js — Ghost OS v7 Runtime Interface
  * Bridge entre execute(params) et toolRouter + World Model check
  */
 import { createHash } from "crypto";
@@ -70,7 +70,7 @@ export async function execute(params = {}) {
     return final;
   } catch (err) {
     const duration_ms = Date.now() - start;
-    await reportFailure("organise_les_screenshots_par_date_et_les", err, params);
+    await reportFailure("organise_screenshots", err, params);
     return { success: false, error: err.message, duration_ms };
   }
 }

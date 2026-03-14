@@ -9,7 +9,7 @@
 
 import { Telegraf } from "telegraf";
 import { WebSocketServer } from "ws";
-import { readFileSync, writeFileSync, mkdirSync, existsSync } from "fs";
+import { readFileSync, writeFileSync, renameSync, mkdirSync, existsSync } from "fs";
 import { join, dirname } from "path";
 import { readdir, stat, unlink } from "fs/promises";
 import { fileURLToPath } from "url";
@@ -86,6 +86,19 @@ const CONFIG = {
   HUD_TOKEN: process.env.HUD_TOKEN || null,  // token optionnel pour sécuriser le WebSocket HUD
 };
 
+// ─── Validation sécurité au démarrage ───────────────────────────────────────
+const _CHIMERA_DEFAULT = 'pico-ruche-dev-secret-changez-moi';
+const _chimeraSecret = process.env.CHIMERA_SECRET || '';
+if (!_chimeraSecret || _chimeraSecret === _CHIMERA_DEFAULT) {
+  if (process.env.NODE_ENV === 'production') {
+    logger.error("CHIMERA_SECRET non défini ou valeur par défaut — refus de démarrer en production.");
+    logger.error("Générer avec : openssl rand -hex 32");
+    process.exit(1);
+  } else {
+    logger.warn("⚠️  CHIMERA_SECRET non configuré — utilisation d'une valeur de dev. NE PAS utiliser en production.");
+  }
+}
+
 if (!STANDALONE) {
   if (!CONFIG.TELEGRAM_TOKEN) {
     logger.error("TELEGRAM_BOT_TOKEN manquant (requis hors mode standalone)");
@@ -129,7 +142,10 @@ export function saveMission(entry) {
   // Cache L1 accélérateur : indexe par id pour accès O(1)
   if (entry.id) _missionCache.set(entry.id, entry);
   try {
-    writeFileSync(MISSIONS_FILE, JSON.stringify(_missionsCache, null, 2));
+    // FIX 14 — Écriture atomique : fichier temp + renameSync (évite corruption si crash)
+    const tmp = MISSIONS_FILE + '.tmp';
+    writeFileSync(tmp, JSON.stringify(_missionsCache, null, 2));
+    renameSync(tmp, MISSIONS_FILE);
   } catch (err) {
     logger.error(`Erreur sauvegarde mission: ${err.message}`);
   }
@@ -664,7 +680,13 @@ if (STANDALONE) {
 }
 
 // ─── MODE TELEGRAM ───────────────────────────────────────────────────────────────────────────
+// TELEGRAM_MODE: 'node' (défaut) = Telegraf actif | 'python' | 'disabled' = Telegraf désactivé
 else {
+  const TELEGRAM_MODE = process.env.TELEGRAM_MODE || 'node';
+  if (TELEGRAM_MODE !== 'node' && TELEGRAM_MODE !== 'auto') {
+    // Guard anti-409 : si Python gère Telegram, Telegraf ne démarre pas
+    logger.info(`🤖 Telegraf désactivé (TELEGRAM_MODE=${TELEGRAM_MODE}) — Telegram géré par Python ou désactivé`);
+  } else {
   const bot = new Telegraf(CONFIG.TELEGRAM_TOKEN);
 
   bot.use(async (ctx, next) => {
@@ -736,9 +758,13 @@ export async function run(params) {
     const skillDir = join(ROOT, "skills", skillName);
     mkdirSync(skillDir, { recursive: true });
     writeFileSync(join(skillDir, "skill.js"), result.text);
-    writeFileSync(join(skillDir, "manifest.json"), JSON.stringify(
+    // FIX 14 — Écriture atomique manifest.json : fichier temp + renameSync
+    const manifestPath = join(skillDir, "manifest.json");
+    const manifestTmp = manifestPath + '.tmp';
+    writeFileSync(manifestTmp, JSON.stringify(
       { name: skillName, description: desc, version: "1.0.0", model: result.model, created: new Date().toISOString() }, null, 2
     ));
+    renameSync(manifestTmp, manifestPath);
     await ctx.telegram.editMessageText(
       ctx.chat.id, msg.message_id, undefined,
       `✅ Skill créé: \`${skillName}\`\n\n${result.text.substring(0, 500)}`,
@@ -824,4 +850,5 @@ export async function run(params) {
   const shutdown = () => { logger.info("🛑 Arrêt en cours..."); bot.stop(); wss.close(); process.exit(0); };
   process.once("SIGINT", shutdown);
   process.once("SIGTERM", shutdown);
+  } // fin else TELEGRAM_MODE === 'node'
 }

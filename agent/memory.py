@@ -5,6 +5,7 @@ Mémoire épisodique JSONL + mémoire persistante + world state
 import json
 import os
 import asyncio
+import tempfile
 from datetime import datetime
 from pathlib import Path
 from fastapi import FastAPI
@@ -53,6 +54,28 @@ class Episode(BaseModel):
 class WorldStateUpdate(BaseModel):
     key: str
     value: Any
+
+
+def atomic_write_json(filepath, data) -> None:
+    """Écriture atomique JSON via fichier temp + rename (évite corruption).
+
+    Utilise tempfile.mkstemp dans le même répertoire que la cible pour garantir
+    que le rename est atomique (même device/filesystem). En cas d'erreur, le
+    fichier temporaire est supprimé et l'exception est propagée.
+    """
+    path = Path(filepath)
+    dir_path = str(path.parent.resolve())
+    fd, tmp_path = tempfile.mkstemp(dir=dir_path, suffix='.tmp')
+    try:
+        with os.fdopen(fd, 'w', encoding='utf-8') as f:
+            json.dump(data, f, ensure_ascii=False, indent=2)
+        os.replace(tmp_path, str(path))  # atomique sur POSIX
+    except Exception:
+        try:
+            os.unlink(tmp_path)
+        except OSError:
+            pass
+        raise
 
 
 def _read_episodes_safe(filepath: Path) -> list:
@@ -169,7 +192,7 @@ async def update_world_state(update: WorldStateUpdate):
     state = json.loads(WORLD_STATE_FILE.read_text(encoding="utf-8"))
     state[update.key] = update.value
     state["last_updated"] = datetime.utcnow().isoformat()
-    WORLD_STATE_FILE.write_text(json.dumps(state, indent=2, ensure_ascii=False))
+    atomic_write_json(WORLD_STATE_FILE, state)
     return {"updated": True}
 
 

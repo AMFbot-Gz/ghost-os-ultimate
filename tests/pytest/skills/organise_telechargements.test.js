@@ -1,10 +1,10 @@
 /**
- * tests/skills/organise_les_screenshots_par_date_et_les.test.js — Ghost OS v7 Unit Tests
+ * tests/skills/organise_telechargements.test.js — Ghost OS v7 Unit Tests
  * Vérifie: succès, timing osascript <100ms (cache), erreur gracieuse
  */
-import { execute } from "../../skills/organise_les_screenshots_par_date_et_les/index.js";
+import { execute } from "../../skills/organise_telechargements/index.js";
 
-describe("Skill: organise_les_screenshots_par_date_et_les", () => {
+describe("Skill: organise_telechargements", () => {
   test("execute() retourne un objet avec success", async () => {
     const result = await execute({});
     expect(result).toHaveProperty("success");

@@ -97,15 +97,19 @@ program
   .command('mission <text>')
   .description('Lancer une mission')
   .option('-p, --priority <n>', 'Priorité (1-5)', '3')
-  .action((text, opts) => {
+  .action(async (text, opts) => {
     console.log(`\n🎯 Mission: "${text}"\n`);
-    const body = JSON.stringify({ command: text, priority: parseInt(opts.priority) });
+    // Utilise fetch natif Node.js 18+ — pas d'interpolation shell, pas d'injection possible
     try {
-      const result = execSync(
-        `curl -s -X POST http://localhost:8001/mission -H 'Content-Type: application/json' -d '${body}'`,
-        { cwd: ROOT, encoding: 'utf-8' }
-      );
-      console.log(JSON.parse(result));
+      const res = await fetch('http://localhost:8001/mission', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ command: text, priority: parseInt(opts.priority, 10) }),
+        signal:  AbortSignal.timeout(15_000),
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}: ${await res.text()}`);
+      const result = await res.json();
+      console.log(result);
     } catch (err) {
       console.error('❌ Erreur:', err.message);
       console.error('   Vérifie que les couches Python sont démarrées (ghost start)');
@@ -129,7 +133,7 @@ program
 
 program
   .command('skill <action> [name]')
-  .description('Gérer les skills: list | install <name> | info <name>')
+  .description('Gérer les skills: list | install <name> | update <name> | uninstall <name> | stats')
   .action(async (action, name) => {
     const { SkillsMarketplace } = await import('../ecosystem/marketplace/skills_marketplace.js');
     const market = new SkillsMarketplace({ skills_dir: join(ROOT, 'skills') });
@@ -145,7 +149,28 @@ program
         if (!name) { console.error('Usage: ghost skill install <name>'); process.exit(1); }
         console.log(`\n📦 Installation de "${name}"...`);
         const result = await market.install(name);
-        console.log(result.success ? `  ✅ ${name} installé` : `  ❌ ${result.error}`);
+        if (result.skipped)  console.log(`  ⏭  ${name} ${result.message}`);
+        else if (result.success) console.log(`  ✅ ${name} installé`);
+        else console.error(`  ❌ ${result.error || JSON.stringify(result.errors)}`);
+        break;
+      }
+      case 'update': {
+        if (!name) { console.error('Usage: ghost skill update <name> [<source_path>]'); process.exit(1); }
+        console.log(`\n🔄 Mise à jour de "${name}"...`);
+        const upResult = await market.upgrade(name);
+        if (!upResult.success) {
+          console.error(`  ❌ ${upResult.error}`);
+        } else if (upResult.upgraded) {
+          console.log(`  ✅ ${name} mis à jour v${upResult.from} → v${upResult.to}`);
+        } else {
+          console.log(`  ⏭  ${name} déjà à jour (v${upResult.to || '?'})`);
+        }
+        break;
+      }
+      case 'uninstall': {
+        if (!name) { console.error('Usage: ghost skill uninstall <name>'); process.exit(1); }
+        const unResult = market.uninstall(name);
+        console.log(unResult.success ? `  ✅ ${name} désinstallé` : `  ❌ ${unResult.error}`);
         break;
       }
       case 'stats': {
@@ -154,7 +179,7 @@ program
         break;
       }
       default:
-        console.error(`Action inconnue: ${action}. Options: list | install | stats`);
+        console.error(`Action inconnue: ${action}. Options: list | install | update | uninstall | stats`);
     }
   });
 

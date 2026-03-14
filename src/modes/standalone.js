@@ -14,6 +14,58 @@ import { createMcpRoutes } from "../api/mcp_routes.js";
 import { createMutationsRoutes } from "../api/mutations.js";
 import { registerConfigRoutes } from "../api/config_routes.js";
 import { startCoeusLoop } from "../agents/coeus.js";
+import { readFileSync } from "fs";
+import { resolve, dirname } from "path";
+import { fileURLToPath } from "url";
+import eventBus from "../../core/events/event_bus.js";
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const PROJECT_ROOT = resolve(__dirname, "../../");
+
+// URLs des 7 couches Python — port fixe défini par l'architecture
+const LAYER_URLS = {
+  queen_python: "http://localhost:8001/health",
+  perception:   "http://localhost:8002/health",
+  brain:        "http://localhost:8003/health",
+  executor:     "http://localhost:8004/health",
+  evolution:    "http://localhost:8005/health",
+  memory:       "http://localhost:8006/health",
+  mcp_bridge:   "http://localhost:8007/health",
+};
+
+/**
+ * Vérifie l'état d'une couche Python via son endpoint /health.
+ * Timeout de 2 secondes, retourne "OK" ou "DOWN".
+ *
+ * @param {string} url
+ * @returns {Promise<string>}
+ */
+async function checkLayer(url) {
+  try {
+    const res = await fetch(url, { signal: AbortSignal.timeout(2000) });
+    return res.ok ? "OK" : `DOWN (HTTP ${res.status})`;
+  } catch {
+    return "DOWN";
+  }
+}
+
+/**
+ * Lit skills/registry.json et retourne le nombre de skills enregistrés.
+ *
+ * @returns {number}
+ */
+function countSkills() {
+  try {
+    const raw  = readFileSync(resolve(PROJECT_ROOT, "skills/registry.json"), "utf8");
+    const data = JSON.parse(raw);
+    // Supporte { skills: [...] } ou un tableau direct
+    if (Array.isArray(data)) return data.length;
+    if (Array.isArray(data.skills)) return data.skills.length;
+    return 0;
+  } catch {
+    return -1; // Fichier absent ou invalide
+  }
+}
 
 /**
  * Lance le serveur API standalone
@@ -44,6 +96,64 @@ export function startStandaloneServer(deps) {
     }
     await next();
   });
+
+  // ─── Auth Bearer — routes /api/* (sauf /api/health, /health, /mcp/health) ──
+  // Routes publiques exclues : /api/health, /health, /mcp/health
+  // Si CHIMERA_SECRET absent ou valeur de dev → warn et laisse passer (mode dev)
+  const _BEARER_DEV_SECRET = 'pico-ruche-dev-secret-changez-moi';
+  const bearerAuth = async (c, next) => {
+    const path = c.req.path;
+    // Routes publiques — jamais bloquées
+    if (path === '/api/health' || path === '/health' || path === '/mcp/health') {
+      await next();
+      return;
+    }
+    const secret = process.env.CHIMERA_SECRET;
+    // Pas de secret configuré ou valeur de dev → mode dev, pas de blocage
+    if (!secret || secret === _BEARER_DEV_SECRET) {
+      logger.warn('[Auth] CHIMERA_SECRET absent ou valeur de dev — routes /api/* non protégées');
+      await next();
+      return;
+    }
+    const auth = c.req.header('Authorization') || '';
+    if (!auth.startsWith('Bearer ') || auth.slice(7) !== secret) {
+      return c.json({ error: 'Unauthorized' }, 401);
+    }
+    await next();
+  };
+
+  // ─── Route /debug — Dashboard temps réel (publique, avant bearerAuth) ──────
+  // Retourne un instantané complet de l'état Ghost OS : uptime, mémoire,
+  // état des 7 couches Python, métriques event bus, nombre de skills.
+  app.get("/debug", async (c) => {
+    // Vérification parallèle de toutes les couches Python
+    const layerEntries = await Promise.all(
+      Object.entries(LAYER_URLS).map(async ([name, url]) => [name, await checkLayer(url)])
+    );
+    const layers = Object.fromEntries(layerEntries);
+
+    // Métriques du bus d'événements (NeuralEventBus expose getMetrics())
+    let event_bus_metrics = null;
+    try {
+      event_bus_metrics = eventBus.getMetrics?.() ?? null;
+    } catch {
+      event_bus_metrics = null;
+    }
+
+    return c.json({
+      timestamp:          new Date().toISOString(),
+      version:            "1.0.0",
+      mode:               process.env.GHOST_OS_MODE || "standalone",
+      uptime_s:           Math.round(process.uptime()),
+      memory_mb:          Math.round(process.memoryUsage().heapUsed / 1024 / 1024 * 100) / 100,
+      layers,
+      event_bus_metrics,
+      skills_count:       countSkills(),
+    });
+  });
+
+  // Appliqué sur toutes les routes /api/*
+  app.use('/api/*', bearerAuth);
 
   // ─── Routes missions ────────────────────────────────────────────────────────
   // Passe aussi healthMonitor, missionCache, eventBus pour l'enrichissement de /api/status
