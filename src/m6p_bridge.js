@@ -4,7 +4,7 @@
  * PeerJS + QR Code + Stream vidéo H.264
  */
 
-import { WebSocketServer } from "ws";
+import { WebSocketServer, WebSocket } from "ws";
 import { join, dirname } from "path";
 import { fileURLToPath } from "url";
 import QRCode from "qrcode";
@@ -39,7 +39,6 @@ let hudWs = null;
 function hudBroadcast(event) {
   try {
     if (!hudWs || hudWs.readyState !== 1) {
-      const { WebSocket } = require("ws");
       hudWs = new WebSocket("ws://localhost:9001");
     }
     hudWs.send(JSON.stringify({ ...event, ts: Date.now() }));

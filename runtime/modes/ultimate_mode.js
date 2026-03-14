@@ -8,6 +8,7 @@
  */
 
 import { UniversalConsciousness } from '../../core/consciousness/universal_consciousness.js';
+import { logger } from '../../src/utils/logger.js';
 // ARCHITECTURE (tâche #13) :
 //   On importe le singleton NeuralEventBus depuis core/events/event_bus.js
 //   au lieu d'en créer une nouvelle instance locale. Cela garantit que ce bus
@@ -71,6 +72,20 @@ export class UltimateMode {
     this.consciousness.achieveConsciousness().catch(err =>
       console.error('[UltimateMode] Conscience échouée:', err.message)
     );
+
+    // Listeners pour événements UniversalConsciousness
+    this.event_bus.on('self.aware', (data) => {
+      logger.debug('[UltimateMode] Conscience: self-aware', data);
+    });
+    this.event_bus.on('environment.perceived', (data) => {
+      logger.debug('[UltimateMode] Conscience: environment perceived');
+    });
+    this.event_bus.on('goals.established', (data) => {
+      logger.debug('[UltimateMode] Conscience: goals established');
+    });
+    this.event_bus.on('consciousness.shutdown', () => {
+      logger.info('[UltimateMode] Conscience: shutdown signal received');
+    });
 
     this._active = true;
     console.log('✅ Mode Ultime activé — toutes les couches opérationnelles');

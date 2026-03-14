@@ -43,7 +43,7 @@ function getToolRisk(toolName) {
 }
 
 async function requestHITL(toolName, args, threshold, timeoutMs) {
-  timeoutMs = timeoutMs ?? parseInt(process.env.HITL_TIMEOUT_SEC || '60') * 1000;
+  timeoutMs = timeoutMs ?? parseInt(process.env.HITL_TIMEOUT_SECONDS || '60') * 1000;
   const risk = getToolRisk(toolName);
   if (risk < threshold) return true; // approbation automatique
 

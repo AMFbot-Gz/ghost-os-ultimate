@@ -82,7 +82,7 @@ export const config = {
 
   // Limits
   costAlertUSD: parseFloat(process.env.COST_ALERT_USD || String(fileConfig.costAlertUSD || "2.00")),
-  hitlTimeoutSec: parseInt(process.env.HITL_TIMEOUT_SEC || String(fileConfig.hitlTimeoutSec || "60")),
+  hitlTimeoutSec: parseInt(process.env.HITL_TIMEOUT_SECONDS || String(fileConfig.hitlTimeoutSec || "60")),
   ramLimitMB: parseInt(process.env.RAM_LIMIT_MB || String(fileConfig.ramLimitMB || "500")),
 
   // Auth

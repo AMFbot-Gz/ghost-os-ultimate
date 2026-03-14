@@ -9,15 +9,15 @@ import Composer from "../Composer.jsx";
 
 const QUEEN_API = import.meta.env.VITE_QUEEN_API || "http://localhost:3000";
 
-// Couches Python et leurs ports
-const LAYERS = [
-  { name: "Queen Python", port: 8001 },
-  { name: "Perception",   port: 8002 },
-  { name: "Brain",        port: 8003 },
-  { name: "Executor",     port: 8004 },
-  { name: "Evolution",    port: 8005 },
-  { name: "Memory",       port: 8006 },
-  { name: "MCP Bridge",   port: 8007 },
+// Noms de couches dans l'ordre d'affichage (correspond aux clés de debug.layers)
+const LAYER_KEYS = [
+  { key: "queen_python", name: "Queen Python" },
+  { key: "perception",   name: "Perception"   },
+  { key: "brain",        name: "Brain"        },
+  { key: "executor",     name: "Executor"     },
+  { key: "evolution",    name: "Evolution"    },
+  { key: "memory",       name: "Memory"       },
+  { key: "mcp_bridge",   name: "MCP Bridge"   },
 ];
 
 // ─── Skeleton shimmer ─────────────────────────────────────────────────────────
@@ -114,7 +114,7 @@ function LayerHealthBar({ layers }) {
       {layers.map(l => (
         <div
           key={l.name}
-          title={`${l.name} (${l.port}) — ${l.ok ? "OK" : "DOWN"}`}
+          title={`${l.name} — ${l.ok ? "OK" : "DOWN"}`}
           style={{
             width: 8,
             height: 8,
@@ -239,8 +239,8 @@ export default function Overview({ status: statusProp, wsEvents = [] }) {
   // Données sparkline mockées avec animation légère
   const [sparkData, setSparkData] = useState([4, 7, 3, 9, 5, 11, 8, 14, 10, 12, 9, 16]);
 
-  // Amélioration B — santé des couches Python
-  const [layers, setLayers] = useState(LAYERS.map(l => ({ ...l, ok: false })));
+  // Amélioration B — santé des couches Python (via /debug)
+  const [layers, setLayers] = useState(LAYER_KEYS.map(l => ({ ...l, ok: false })));
 
   // Amélioration C — métriques EventBus (depuis /api/status)
   // On réutilise `status` qui est déjà fetché — les champs events sont extraits à l'usage
@@ -272,16 +272,20 @@ export default function Overview({ status: statusProp, wsEvents = [] }) {
     }
   }, []);
 
-  // Fetch santé des 7 couches Python en parallèle (toutes les 15s)
+  // Fetch santé des couches Python via /debug (un seul appel au lieu de 8 parallèles)
   const fetchLayers = useCallback(async () => {
-    const results = await Promise.allSettled(
-      LAYERS.map(l =>
-        fetch(`http://localhost:${l.port}/health`, { signal: AbortSignal.timeout(2500) })
-          .then(r => ({ ...l, ok: r.ok }))
-          .catch(() => ({ ...l, ok: false }))
-      )
-    );
-    setLayers(results.map(r => r.status === "fulfilled" ? r.value : { ok: false }));
+    try {
+      const debugRes = await fetch(`${QUEEN_API}/debug`, { signal: AbortSignal.timeout(4000) });
+      const debug = await debugRes.json();
+      // debug.layers = { queen_python: "OK"|"DOWN", perception: ..., ... }
+      setLayers(LAYER_KEYS.map(l => ({
+        ...l,
+        ok: (debug?.layers?.[l.key] ?? "DOWN") === "OK",
+      })));
+    } catch {
+      // En cas d'erreur réseau, toutes les couches sont DOWN
+      setLayers(LAYER_KEYS.map(l => ({ ...l, ok: false })));
+    }
   }, []);
 
   useEffect(() => {

@@ -10,8 +10,23 @@ export default defineConfig({
   server: {
     port: 3001,
     proxy: {
-      "/api": "http://localhost:8080",
-      "/ws": { target: "ws://localhost:8080", ws: true },
+      "/api": {
+        target: "http://localhost:3000",
+        changeOrigin: true,
+      },
+      "/mcp": {
+        target: "http://localhost:3000",
+        changeOrigin: true,
+      },
+      "/debug": {
+        target: "http://localhost:3000",
+        changeOrigin: true,
+      },
+      "/ws": {
+        target: "ws://localhost:9001",
+        ws: true,
+        changeOrigin: true,
+      },
     },
   },
 });
