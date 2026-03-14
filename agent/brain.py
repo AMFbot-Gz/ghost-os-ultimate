@@ -421,7 +421,8 @@ async def think(req: ThinkRequest):
         context_blocks.append(learnings_ctx)
     extra_context = "\n\n".join(context_blocks)
 
-    system_prompt = f"""Tu es le cerveau de PICO-RUCHE (Ghost OS v5.0.0).
+    system_prompt = f"""Tu es le cerveau de Ghost OS Ultimate v2.0 — agent autonome hybride tournant 100% sur macOS.
+LLM principal : Claude claude-opus-4-6 (Anthropic). Fallback chain : Kimi → OpenAI → Ollama local.
 Tu analyses la mission et la décomposes en sous-tâches atomiques parallélisables.
 Maximum {CONFIG['brain']['max_subtasks']} sous-tâches. Réponds UNIQUEMENT en JSON valide sans markdown.
 

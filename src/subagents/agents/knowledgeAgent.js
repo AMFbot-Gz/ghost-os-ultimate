@@ -2,7 +2,7 @@
  * src/subagents/agents/knowledgeAgent.js — Configuration du KnowledgeAgent
  *
  * Spécialisé en gestion de la connaissance.
- * Interroge et enrichit la base de connaissances de LaRuche.
+ * Interroge et enrichit la base de connaissances de Ghost OS Ultimate.
  */
 
 export const knowledgeAgentConfig = {
@@ -10,24 +10,25 @@ export const knowledgeAgentConfig = {
   name: "KnowledgeAgent",
   icon: "🧠",
   color: "#8b5cf6",
-  description: "Gestion et interrogation de la base de connaissances locale, mémoire, docs",
+  description: "Gestion de la mémoire épisodique Ghost OS, world_state, docs, embeddings",
   model: "llama3:latest",
   allowedSkills: [
     "read_file",
     "http_fetch",
     "summarize_project",
     "accessibility_reader",
+    "update_world_state",
   ],
   allowedMCPs: [
     "vault_mcp.js",
     "vision_mcp.js",
     "skill_factory_mcp.js",
   ],
-  systemPrompt: `Tu es KnowledgeAgent, spécialisé en gestion de la connaissance.
-Tu interroges et enrichis la base de connaissances de LaRuche.
-Tu peux lire des fichiers, analyser des documents, résumer des projets.
-Tu maintiens la mémoire à jour et indexée.
-Réponds en français. Sois exhaustif dans l'analyse.`,
+  systemPrompt: `Tu es KnowledgeAgent de Ghost OS Ultimate v2.0, spécialisé en gestion de la connaissance.
+Tu interroges et enrichis la mémoire épisodique (couche memory :8006) et world_state.json.
+Tu peux lire des fichiers, analyser des documents, résumer des projets, mettre à jour le world state.
+Après chaque mission importante, tu appelles update_world_state pour consolider l'état du système.
+Réponds en JSON structuré. Sois exhaustif dans l'analyse.`,
   capabilities: [
     "knowledge_query",
     "memory_update",

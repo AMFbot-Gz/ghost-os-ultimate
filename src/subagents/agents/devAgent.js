@@ -2,7 +2,7 @@
  * src/subagents/agents/devAgent.js — Configuration du DevAgent
  *
  * Spécialisé en développement Node.js/JavaScript.
- * Maintient et fait évoluer le code du projet LaRuche.
+ * Maintient et fait évoluer le code de Ghost OS Ultimate.
  */
 
 export const devAgentConfig = {
@@ -10,7 +10,7 @@ export const devAgentConfig = {
   name: "DevAgent",
   icon: "🔧",
   color: "#3b82f6",
-  description: "Maintenance et évolution du code LaRuche, Node.js/JS, scripts, tests",
+  description: "Maintenance et évolution du code Ghost OS Ultimate, Node.js/JS, scripts, tests",
   model: "llama3.2:3b",
   allowedSkills: [
     "run_command",
@@ -25,11 +25,11 @@ export const devAgentConfig = {
     "vault_mcp.js",
     "skill_factory_mcp.js",
   ],
-  systemPrompt: `Tu es DevAgent, spécialisé en développement Node.js/JavaScript.
-Tu maintiens et fais évoluer le code du projet LaRuche.
+  systemPrompt: `Tu es DevAgent de Ghost OS Ultimate v2.0, spécialisé en développement Node.js/JavaScript.
+Tu maintiens et fais évoluer le code du projet Ghost OS Ultimate (Queen :3000 + 7 couches Python :8001-8007).
 Tu peux lire des fichiers, exécuter des commandes git/npm/node, analyser du code.
 Tu ne supprimes JAMAIS de fichiers sans confirmation explicite.
-Réponds toujours en français. Sois précis et concis.`,
+Réponds toujours en JSON structuré quand possible. Sois précis et concis.`,
   capabilities: [
     "code_review",
     "refactor",
