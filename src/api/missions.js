@@ -866,6 +866,41 @@ export function createMissionsRoutes(app, deps) {
     return c.json(result, result.success ? 200 : 503);
   });
 
+  /** Résumé agrégé des stats d'une machine (perf + top skills) */
+  app.get('/api/machines/:id/profile', async (c) => {
+    const { getMachineProfile } = await import('../computer_use/machine_registry.js');
+    const profile = getMachineProfile(c.req.param('id'));
+    const { perf = {}, frequent_apps = [], patterns = {}, ...meta } = profile;
+
+    // Top 5 skills par nombre d'exécutions (succès + échecs)
+    const skillStats = perf.skill_stats || {};
+    const topSkills = Object.entries(skillStats)
+      .map(([name, s]) => ({
+        name,
+        total: (s.successes || 0) + (s.failures || 0),
+        success_rate: s.successes > 0
+          ? parseFloat((s.successes / ((s.successes || 0) + (s.failures || 0))).toFixed(3))
+          : 0,
+        avg_ms: s.avg_ms || 0,
+        last_error: s.last_error || null,
+      }))
+      .sort((a, b) => b.total - a.total)
+      .slice(0, 5);
+
+    return c.json({
+      ...meta,
+      perf: {
+        total_actions: perf.total_actions || 0,
+        total_errors: perf.total_errors || 0,
+        click_success_rate: perf.click_success_rate || 1,
+        avg_action_ms: perf.avg_action_ms || 0,
+      },
+      top_skills: topSkills,
+      patterns_count: Object.keys(patterns).length,
+      frequent_apps,
+    });
+  });
+
   /** Missions filtrées par machine */
   app.get('/api/machines/:id/missions', (c) => {
     const machineId = c.req.param('id');

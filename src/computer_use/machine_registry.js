@@ -94,6 +94,8 @@ function defaultProfile(machineId) {
       avg_action_ms:      0,
       total_actions:      0,
       total_errors:       0,
+      // Statistiques par skill : { [skillName]: { successes, failures, avg_ms, last_error } }
+      skill_stats:        {},
     },
     patterns:      {},
     last_seen:     null,
@@ -227,4 +229,118 @@ export function recallPattern(machineId, intent) {
     if (score > bestScore && score >= 0.6) { bestScore = score; bestKey = key; }
   }
   return bestKey ? profile.patterns[bestKey] : null;
+}
+
+// ─── Fonctions de haut niveau : succès/échec par skill ────────────────────────
+
+/**
+ * Enregistre un succès pour un skill sur cette machine.
+ * Met à jour les stats globales + par-skill.
+ * @param {string} machineId
+ * @param {{ skill: string, duration_ms: number }} ctx
+ */
+export function recordSuccess(machineId, ctx) {
+  const { skill = 'unknown', duration_ms = 0 } = ctx;
+  const profile = getMachineProfile(machineId);
+  const perf    = { ...profile.perf, skill_stats: { ...profile.perf?.skill_stats } };
+
+  // Globaux
+  perf.total_actions = (perf.total_actions || 0) + 1;
+  const n = perf.total_actions;
+  perf.avg_action_ms = Math.round(((perf.avg_action_ms || 0) * (n - 1) + duration_ms) / n);
+  perf.click_success_rate = parseFloat(
+    ((n - (perf.total_errors || 0)) / n).toFixed(3)
+  );
+
+  // Par skill
+  const ss = perf.skill_stats[skill] || { successes: 0, failures: 0, avg_ms: 0, last_error: null };
+  const sn = ss.successes + 1;
+  perf.skill_stats[skill] = {
+    ...ss,
+    successes: sn,
+    avg_ms: Math.round((ss.avg_ms * ss.successes + duration_ms) / sn),
+  };
+
+  updateMachineProfile(machineId, { perf, last_seen: new Date().toISOString() });
+}
+
+/**
+ * Enregistre un échec pour un skill sur cette machine.
+ * @param {string} machineId
+ * @param {{ skill: string, duration_ms: number }} ctx
+ * @param {string} [error]
+ */
+export function recordFailure(machineId, ctx, error = '') {
+  const { skill = 'unknown', duration_ms = 0 } = ctx;
+  const profile = getMachineProfile(machineId);
+  const perf    = { ...profile.perf, skill_stats: { ...profile.perf?.skill_stats } };
+
+  // Globaux
+  perf.total_actions = (perf.total_actions || 0) + 1;
+  perf.total_errors  = (perf.total_errors  || 0) + 1;
+  const n = perf.total_actions;
+  perf.avg_action_ms = Math.round(((perf.avg_action_ms || 0) * (n - 1) + duration_ms) / n);
+  perf.click_success_rate = parseFloat(
+    ((n - perf.total_errors) / n).toFixed(3)
+  );
+
+  // Par skill
+  const ss = perf.skill_stats[skill] || { successes: 0, failures: 0, avg_ms: 0, last_error: null };
+  perf.skill_stats[skill] = {
+    ...ss,
+    failures: ss.failures + 1,
+    last_error: error ? error.slice(0, 120) : ss.last_error,
+  };
+
+  updateMachineProfile(machineId, { perf, last_seen: new Date().toISOString() });
+}
+
+/**
+ * Retourne le timeout recommandé pour un skill sur cette machine.
+ * Si la machine a des données historiques, utilise avg_ms × 2.5 comme marge de sécurité.
+ * @param {string} machineId
+ * @param {number} defaultMs   - timeout de base (ex: 10000)
+ * @param {string} [skillName] - si fourni, utilise les stats spécifiques au skill
+ * @returns {number}
+ */
+export function getRecommendedTimeout(machineId, defaultMs, skillName) {
+  const profile = getMachineProfile(machineId);
+  const ss = skillName && profile.perf?.skill_stats?.[skillName];
+
+  if (ss && ss.successes >= 3) {
+    // Assez de données : avg × 2.5, borné entre 3s et 60s
+    const recommended = Math.round(ss.avg_ms * 2.5);
+    return Math.max(3000, Math.min(60000, recommended));
+  }
+
+  // Fallback sur les stats globales si nombreuses actions connues
+  const globalAvg = profile.perf?.avg_action_ms || 0;
+  if (globalAvg > 0 && (profile.perf?.total_actions || 0) >= 10) {
+    const recommended = Math.round(globalAvg * 3);
+    return Math.max(3000, Math.min(60000, recommended));
+  }
+
+  return defaultMs;
+}
+
+/**
+ * Retourne les applications fréquemment utilisées sur cette machine.
+ * @param {string} machineId
+ * @returns {string[]}
+ */
+export function getPreferredApps(machineId) {
+  const profile = getMachineProfile(machineId);
+  return profile.frequent_apps || [];
+}
+
+/**
+ * Enregistre une app utilisée dans frequent_apps (dédupliqué, max 20).
+ * @param {string} machineId
+ * @param {string} appName
+ */
+export function recordAppUsage(machineId, appName) {
+  if (!appName) return;
+  const profile = getMachineProfile(machineId);
+  const apps = [appName, ...(profile.frequent_apps || []).filter(a => a !== appName)].slice(0, 20);
+  updateMachineProfile(machineId, { frequent_apps: apps });
 }

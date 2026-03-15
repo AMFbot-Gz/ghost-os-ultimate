@@ -14,6 +14,9 @@ import { existsSync } from 'fs';
 import { initAgent, deductCredits, CREDIT_PER_SKILL } from '../market/creditSystem.js';
 import { estimateRisk } from '../simulation/riskEstimator.js';
 import { logger } from '../utils/logger.js';
+import { recordSuccess, recordFailure, getRecommendedTimeout } from '../computer_use/machine_registry.js';
+
+const LOCAL_MACHINE_ID = process.env.MACHINE_ID || 'mac-local';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(__dirname, '../..');
@@ -124,9 +127,11 @@ async function loadSkill(skillName) {
  * Exécute un step avec timeout + retry
  * @returns {{ success: boolean, result: any, duration: number, attempts: number }}
  */
-export async function executeStep(step, { hudFn, maxRetries = 1 } = {}) {
+export async function executeStep(step, { hudFn, maxRetries = 1, machineId } = {}) {
   const { skill, params = {} } = step;
-  const timeout = SKILL_TIMEOUTS[skill] || SKILL_TIMEOUTS._default;
+  const mid = machineId || LOCAL_MACHINE_ID;
+  const baseTimeout = SKILL_TIMEOUTS[skill] || SKILL_TIMEOUTS._default;
+  const timeout = getRecommendedTimeout(mid, baseTimeout, skill);
   const startTime = Date.now();
 
   hudFn?.({ type: 'task_start', task: `${skill}`, params: JSON.stringify(params).slice(0, 80) });
@@ -154,11 +159,13 @@ export async function executeStep(step, { hudFn, maxRetries = 1 } = {}) {
         throw new Error(result.error || 'Skill returned failure');
       }
 
-      hudFn?.({ type: 'task_done', task: skill, status: 'ok', duration: Date.now() - startTime });
+      const duration = Date.now() - startTime;
+      recordSuccess(mid, { skill, duration_ms: duration });
+      hudFn?.({ type: 'task_done', task: skill, status: 'ok', duration });
       return {
         success: true,
         result,
-        duration: Date.now() - startTime,
+        duration,
         attempts: attempt,
         skill,
       };
@@ -179,11 +186,13 @@ export async function executeStep(step, { hudFn, maxRetries = 1 } = {}) {
             fallbackFn(params),
             new Promise((_, rej) => setTimeout(() => rej(new Error('Fallback timeout')), timeout)),
           ]);
-          hudFn?.({ type: 'task_done', task: skill, status: 'ok-fallback', duration: Date.now() - startTime });
+          const fbDuration = Date.now() - startTime;
+          recordSuccess(mid, { skill, duration_ms: fbDuration });
+          hudFn?.({ type: 'task_done', task: skill, status: 'ok-fallback', duration: fbDuration });
           return {
             success: true,
             result: fbResult,
-            duration: Date.now() - startTime,
+            duration: fbDuration,
             attempts: attempt,
             usedFallback: true,
             skill,
@@ -193,11 +202,13 @@ export async function executeStep(step, { hudFn, maxRetries = 1 } = {}) {
         }
       }
 
+      const errDuration = Date.now() - startTime;
+      recordFailure(mid, { skill, duration_ms: errDuration }, err.message);
       hudFn?.({ type: 'task_done', task: skill, status: 'error', error: err.message });
       return {
         success: false,
         error: err.message,
-        duration: Date.now() - startTime,
+        duration: errDuration,
         attempts: attempt,
         skill,
       };
@@ -224,7 +235,7 @@ export async function executeStep(step, { hudFn, maxRetries = 1 } = {}) {
  *   totalSteps: number,
  * }}
  */
-export async function executeSequence(steps, { hudFn, stopOnError = false } = {}) {
+export async function executeSequence(steps, { hudFn, stopOnError = false, machineId } = {}) {
   const results = [];
   const start   = Date.now();
 
@@ -244,7 +255,7 @@ export async function executeSequence(steps, { hudFn, stopOnError = false } = {}
       continue;
     }
 
-    const result = await executeStep(step, { hudFn });
+    const result = await executeStep(step, { hudFn, machineId });
     results.push({ step, ...result });
 
     // Déduction des crédits de l'agent queen après chaque skill réussi

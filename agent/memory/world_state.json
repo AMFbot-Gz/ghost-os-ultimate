@@ -1,11 +1,11 @@
 {
   "system": {
-    "cpu_percent": 6.5,
-    "ram_used_gb": 8.59,
+    "cpu_percent": 5.6,
+    "ram_used_gb": 8.99,
     "ram_total_gb": 17.18,
-    "ram_percent": 63.6,
+    "ram_percent": 65.6,
     "disk_used_gb": 12.26,
-    "disk_free_gb": 251.3,
+    "disk_free_gb": 251.44,
     "processes": [
       {
         "pid": 1234,
@@ -15,7 +15,7 @@
       }
     ]
   },
-  "updated_at": "2026-03-13T23:22:04.705741+00:00",
+  "updated_at": "2026-03-14T02:07:47.778089+00:00",
   "active_app": {
     "name": "Terminal",
     "window_title": null,

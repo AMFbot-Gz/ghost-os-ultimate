@@ -8,6 +8,9 @@ import { getAllSkills, getRelevantSkills, formatSkillsForPrompt } from "../skill
 import { routeByRules } from './intentRouter.js';
 import { buildCompactContext } from '../context/agentIdentity.js';
 import { recall, learn, getHeuristicHint } from '../learning/missionMemory.js';
+import { getRecommendedTimeout, recallPattern } from '../computer_use/machine_registry.js';
+
+const LOCAL_MACHINE_ID = process.env.MACHINE_ID || 'mac-local';
 
 // ─── Utilitaire : tronquer un texte à N tokens estimés ────────────────────────
 // Estimation simple : 1 token ≈ 4 chars (anglais/code) — conservateur côté sécurité
@@ -73,7 +76,9 @@ export function isComputerUseIntent(text) {
 
 // ─── Fonction principale ───────────────────────────────────────────────────────────
 export async function plan(intent, options = {}) {
-  const { timeout = 20000 } = options;
+  const machineId = options.machineId || LOCAL_MACHINE_ID;
+  const defaultLlmTimeout = 20000;
+  const timeout = options.timeout || getRecommendedTimeout(machineId, defaultLlmTimeout, '_llm_plan');
 
   // 1. Routeur déterministe (zéro LLM, zéro erreur, instant)
   const routed = routeByRules(intent);
@@ -81,7 +86,19 @@ export async function plan(intent, options = {}) {
     return { ...routed.plan, model: 'rules-engine' };
   }
 
-  // 2. Mémoire apprise — plan déjà vu, retour immédiat sans LLM
+  // 2a. Pattern machine — séquence déjà réussie sur CETTE machine (priorité)
+  const machinePattern = recallPattern(machineId, intent);
+  if (machinePattern) {
+    console.info(`[planner] Machine pattern hit (${machineId}) — "${intent.slice(0, 50)}"`);
+    return {
+      goal: intent,
+      steps: machinePattern,
+      confidence: 0.95,
+      model: 'machine-pattern',
+    };
+  }
+
+  // 2b. Mémoire apprise — plan déjà vu, retour immédiat sans LLM
   const memorized = recall(intent);
   if (memorized) {
     console.info(`[planner] Memory hit (${(memorized.confidence * 100).toFixed(0)}%) — "${memorized.originalCommand?.slice(0, 50)}"`);
@@ -100,7 +117,7 @@ export async function plan(intent, options = {}) {
 
   let result;
   try {
-    result = await callLLM(prompt, { role, temperature: 0.1 });
+    result = await callLLM(prompt, { role, temperature: 0.1, timeout });
   } catch (err) {
     return { goal: intent, confidence: 0, steps: [], error: err.message };
   }
