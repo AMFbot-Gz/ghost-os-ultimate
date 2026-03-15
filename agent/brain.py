@@ -82,6 +82,55 @@ CONTRAINTES :
 - Si une commande échoue, essaie une alternative différente
 - Toujours vérifier le résultat avant "done\""""
 
+# ─── Prompts Supervisor/Workers ───────────────────────────────────────────
+
+SUPERVISOR_DECOMPOSE_PROMPT = """Tu es le Superviseur de Ghost OS Ultimate v2.0.
+Tu reçois une mission complexe et tu la décomposes en Workers indépendants.
+
+Réponds UNIQUEMENT en JSON valide (sans markdown) :
+
+{
+  "goal": "description concise de l'objectif final",
+  "reasoning": "pourquoi cette décomposition en workers parallèles",
+  "workers": [
+    {
+      "id": "W1",
+      "role": "shell|vision|research|analysis|synthesis",
+      "task": "description précise et auto-suffisante de la tâche",
+      "depends_on": [],
+      "max_steps": 5,
+      "priority": 1
+    }
+  ]
+}
+
+RÔLES :
+- shell     → exécute des commandes bash (lecture, écriture, system)
+- vision    → observe l'écran et l'état du système (screencapture)
+- research  → cherche dans la mémoire sémantique (épisodes passés)
+- analysis  → raisonne sur des données textuelles ou du code (LLM only)
+- synthesis → fusionne TOUS les résultats des autres workers en réponse finale
+
+RÈGLES IMPÉRATIVES :
+- Maximum {max_workers} workers au total
+- depends_on: [] → exécution PARALLÈLE avec les autres workers sans dépendances
+- depends_on: ["W1","W2"] → attend que W1 et W2 soient terminés
+- TOUJOURS finir par UN worker synthesis (depends_on: tous les autres)
+- Chaque tâche doit être autonome et précise — le worker ne voit que sa tâche
+- Évite les dépendances en cascade (max 3 niveaux de waves)
+- max_steps: 3 pour shell/vision/research simple, 5 pour analysis complexe, 1 pour synthesis"""
+
+SUPERVISOR_SYNTHESIS_PROMPT = """Tu es le Superviseur final de Ghost OS Ultimate.
+Tu reçois les résultats de tous les Workers parallèles et tu synthetises une réponse complète.
+
+Produis une réponse claire, structurée et directement utilisable.
+Cite les résultats clés de chaque worker. Identifie les divergences ou incohérences.
+Termine par une conclusion actionnable."""
+
+WORKER_SHELL_CMD_PROMPT = """Tu es un Worker Ghost OS. Ta tâche : {task}
+Réponds UNIQUEMENT avec la commande bash exacte à exécuter, rien d'autre.
+Pas de markdown, pas d'explication — juste la commande."""
+
 # ─── Prompt Critic ────────────────────────────────────────────────────────
 CRITIC_SYSTEM_PROMPT = """Tu es un Critic pour Ghost OS Ultimate. Tu évalues si une action a produit le résultat attendu.
 
@@ -941,6 +990,299 @@ async def react_loop(
     }
 
 
+# ─── Supervisor / Workers ─────────────────────────────────────────────────
+
+async def _supervisor_decompose(mission: str, max_workers: int) -> dict:
+    """Appel LLM Supervisor : décompose la mission en workers avec graph de dépendances."""
+    system = SUPERVISOR_DECOMPOSE_PROMPT.replace("{max_workers}", str(max_workers))
+    try:
+        result = await llm("strategist", [{"role": "user", "content": f"Mission: {mission}"}], system)
+        raw = result["content"].strip()
+        start, end = raw.find("{"), raw.rfind("}") + 1
+        plan = json.loads(raw[start:end]) if start != -1 else {}
+    except Exception as e:
+        print(f"[Supervisor] Decompose failed: {e} — plan minimal")
+        plan = {}
+
+    # Garanties structurelles
+    if not isinstance(plan.get("workers"), list) or not plan["workers"]:
+        plan["workers"] = [
+            {"id": "W1", "role": "analysis", "task": mission, "depends_on": [], "max_steps": 5, "priority": 1},
+            {"id": "W2", "role": "synthesis", "task": f"Synthétise le résultat de W1 pour: {mission}", "depends_on": ["W1"], "max_steps": 1, "priority": 2},
+        ]
+    if not plan.get("goal"):
+        plan["goal"] = mission
+
+    # Valider et normaliser chaque worker
+    valid_roles = {"shell", "vision", "research", "analysis", "synthesis"}
+    for w in plan["workers"]:
+        if not w.get("id"):
+            w["id"] = f"W{plan['workers'].index(w)+1}"
+        if w.get("role") not in valid_roles:
+            w["role"] = "analysis"
+        if not isinstance(w.get("depends_on"), list):
+            w["depends_on"] = []
+        w.setdefault("max_steps", 5)
+        w.setdefault("priority", 1)
+
+    return plan
+
+
+def _topo_sort_workers(workers: list) -> list[list]:
+    """Trie les workers en waves d'exécution parallèle (DAG topologique).
+
+    Wave 0 : workers sans dépendances        → s'exécutent en parallèle
+    Wave 1 : workers dont les deps sont Wave 0 → s'exécutent en parallèle
+    ...
+    Retourne une liste de listes (chaque sous-liste = une wave).
+    """
+    completed: set = set()
+    waves: list = []
+    remaining = list(workers)
+    max_iterations = len(workers) + 1  # protection contre les cycles
+
+    while remaining and max_iterations > 0:
+        max_iterations -= 1
+        wave = [
+            w for w in remaining
+            if all(dep in completed for dep in w.get("depends_on", []))
+        ]
+        if not wave:
+            # Dépendance circulaire ou manquante — forcer l'ajout du reste
+            print(f"[Supervisor] ⚠️  Dépendance non résolue — forçage des {len(remaining)} workers restants")
+            wave = remaining[:]
+        waves.append(wave)
+        for w in wave:
+            completed.add(w["id"])
+            remaining.remove(w)
+
+    return waves
+
+
+def _build_worker_context(worker: dict, all_results: dict) -> str:
+    """Construit le contexte des dépendances pour un worker."""
+    lines = []
+    for dep_id in worker.get("depends_on", []):
+        res = all_results.get(dep_id, {})
+        output = res.get("output", "(pas de résultat)")[:600]
+        status = "✅" if res.get("success") else "❌"
+        lines.append(f"[Résultat {dep_id} — {res.get('role','?')} {status}]:\n{output}")
+    return "\n\n".join(lines)
+
+
+async def _run_worker(worker: dict, all_results: dict, timeout_per_step: int) -> dict:
+    """Exécute un worker selon son rôle.
+
+    - shell / vision / research  → action directe via _execute_react_action
+    - analysis / general / code  → mini react_loop (max worker.max_steps)
+    - synthesis                  → appel LLM unique avec tous les résultats
+    """
+    wid   = worker["id"]
+    role  = worker["role"]
+    task  = worker["task"]
+    steps = worker.get("max_steps", 5)
+    started = time.time()
+
+    dep_ctx = _build_worker_context(worker, all_results)
+    full_task = task + (f"\n\nContexte des workers précédents:\n{dep_ctx}" if dep_ctx else "")
+
+    print(f"[Worker {wid}] 🚀 role={role} task={task[:60]}")
+
+    try:
+        # ── Synthesis : unique appel LLM ──────────────────────────────────
+        if role == "synthesis":
+            # Reconstruit un résumé de TOUS les résultats pour la synthèse
+            all_outputs = []
+            for wid_k, res in all_results.items():
+                out = res.get("output", "(vide)")[:500]
+                status = "✅" if res.get("success") else "❌"
+                all_outputs.append(f"[{wid_k} — {res.get('role','?')} {status}]:\n{out}")
+            synthesis_prompt = (
+                f"Mission originale: {task}\n\n"
+                f"Résultats des workers:\n" + "\n\n".join(all_outputs)
+            )
+            result = await llm_react(
+                [{"role": "user", "content": synthesis_prompt}],
+                SUPERVISOR_SYNTHESIS_PROMPT,
+            )
+            return {
+                "id": wid, "role": role, "task": task,
+                "output": result["content"], "success": True,
+                "duration_ms": int((time.time() - started) * 1000),
+                "steps_taken": 1,
+            }
+
+        # ── Research : semantic_search direct ─────────────────────────────
+        if role == "research":
+            res = await _execute_react_action("memory_search", full_task[:200], timeout_per_step)
+            return {
+                "id": wid, "role": role, "task": task,
+                "output": res["output"], "success": res["ok"],
+                "duration_ms": int((time.time() - started) * 1000),
+                "steps_taken": 1,
+            }
+
+        # ── Vision : perception directe ────────────────────────────────────
+        if role == "vision":
+            res = await _execute_react_action("vision", "observe", timeout_per_step)
+            return {
+                "id": wid, "role": role, "task": task,
+                "output": res["output"], "success": res["ok"],
+                "duration_ms": int((time.time() - started) * 1000),
+                "steps_taken": 1,
+            }
+
+        # ── Shell simple (1 commande évidente) ────────────────────────────
+        # Si la tâche ressemble à une commande directe, exécuter sans LLM
+        task_stripped = full_task.strip()
+        looks_like_cmd = (
+            task_stripped.startswith(("ls ", "cat ", "find ", "grep ", "echo ", "mkdir ", "rm ", "mv ",
+                                       "cp ", "git ", "npm ", "pip ", "python", "node ", "curl ", "open "))
+            and "\n" not in task_stripped
+            and len(task_stripped) < 200
+        )
+        if role == "shell" and looks_like_cmd:
+            res = await _execute_react_action("shell", task_stripped, timeout_per_step)
+            return {
+                "id": wid, "role": role, "task": task,
+                "output": res["output"], "success": res["ok"],
+                "duration_ms": int((time.time() - started) * 1000),
+                "steps_taken": 1,
+            }
+
+        # ── Tous les autres rôles : mini ReAct loop ───────────────────────
+        # (shell complexe, analysis, code, general)
+        loop_result = await react_loop(
+            mission=full_task,
+            max_steps=steps,
+            mission_type="general",
+            timeout_per_step=min(timeout_per_step, 30),
+        )
+        return {
+            "id":         wid,
+            "role":       role,
+            "task":       task,
+            "output":     loop_result.get("final_answer", ""),
+            "success":    loop_result.get("status") == "success",
+            "duration_ms": int((time.time() - started) * 1000),
+            "steps_taken": loop_result.get("steps_taken", 0),
+            "steps":      loop_result.get("steps", []),
+        }
+
+    except Exception as e:
+        print(f"[Worker {wid}] ❌ Erreur: {e}")
+        return {
+            "id": wid, "role": role, "task": task,
+            "output": f"[ERREUR] {type(e).__name__}: {str(e)[:300]}",
+            "success": False,
+            "duration_ms": int((time.time() - started) * 1000),
+            "steps_taken": 0,
+        }
+
+
+async def _run_workers_wave(wave: list, all_results: dict, timeout_per_step: int) -> dict:
+    """Exécute une wave de workers en parallèle via asyncio.gather.
+    Retourne un dict {worker_id: result}.
+    """
+    tasks = [_run_worker(w, all_results, timeout_per_step) for w in wave]
+    results = await asyncio.gather(*tasks, return_exceptions=True)
+    wave_results = {}
+    for worker, result in zip(wave, results):
+        if isinstance(result, Exception):
+            wave_results[worker["id"]] = {
+                "id": worker["id"], "role": worker["role"], "task": worker["task"],
+                "output": f"[EXCEPTION] {result}", "success": False,
+                "duration_ms": 0, "steps_taken": 0,
+            }
+        else:
+            wave_results[worker["id"]] = result
+        print(f"[Wave] Worker {worker['id']} ({worker['role']}) → {'✅' if wave_results[worker['id']]['success'] else '❌'} {wave_results[worker['id']]['duration_ms']}ms")
+    return wave_results
+
+
+async def supervise_loop(
+    mission: str,
+    max_workers: int = 5,
+    timeout_per_step: int = 60,
+) -> dict:
+    """Supervisor/Workers orchestration — exécution parallèle par waves.
+
+    Flow :
+      1. Supervisor décompose la mission en workers + graph de dépendances
+      2. Tri topologique → waves d'exécution
+      3. Chaque wave est exécutée en parallèle (asyncio.gather)
+      4. Les résultats s'accumulent et alimentent les waves suivantes
+      5. Le worker synthesis produit la réponse finale
+    """
+    started    = time.time()
+    mission_id = uuid.uuid4().hex[:8]
+
+    print(f"[Supervisor] 🎯 Mission={mission_id} | '{mission[:60]}'")
+
+    # ── Phase 1 : décomposition ────────────────────────────────────────────
+    plan = await _supervisor_decompose(mission, max_workers)
+    workers = plan["workers"]
+    print(f"[Supervisor] 📋 Plan: {len(workers)} workers — {[w['id'] for w in workers]}")
+
+    # ── Phase 2 : tri topologique → waves ─────────────────────────────────
+    waves = _topo_sort_workers(workers)
+    print(f"[Supervisor] 🌊 {len(waves)} waves: {[[w['id'] for w in wave] for wave in waves]}")
+
+    # ── Phase 3 : exécution par waves ─────────────────────────────────────
+    all_results: dict = {}
+    waves_trace = []
+
+    for wave_idx, wave in enumerate(waves):
+        wave_start = time.time()
+        print(f"[Supervisor] 🌊 Wave {wave_idx+1}/{len(waves)}: {[w['id'] for w in wave]}")
+        wave_results = await _run_workers_wave(wave, all_results, timeout_per_step)
+        all_results.update(wave_results)
+        waves_trace.append({
+            "wave":     wave_idx + 1,
+            "workers":  [w["id"] for w in wave],
+            "results":  {wid: {"success": r["success"], "duration_ms": r["duration_ms"], "steps": r.get("steps_taken", 0)}
+                         for wid, r in wave_results.items()},
+            "duration_ms": int((time.time() - wave_start) * 1000),
+        })
+
+    # ── Phase 4 : résultat final ───────────────────────────────────────────
+    # Chercher le worker synthesis ou prendre le dernier résultat
+    synthesis_workers = [w for w in workers if w["role"] == "synthesis"]
+    if synthesis_workers:
+        final_wid    = synthesis_workers[-1]["id"]
+        final_answer = all_results.get(final_wid, {}).get("output", "")
+    else:
+        # Pas de synthesis explicite → fusion manuelle via LLM
+        all_outputs = "\n\n".join(
+            f"[{wid}]: {r.get('output','')[:400]}" for wid, r in all_results.items()
+        )
+        synth = await llm_react(
+            [{"role": "user", "content": f"Mission: {mission}\n\nRésultats:\n{all_outputs}"}],
+            SUPERVISOR_SYNTHESIS_PROMPT,
+        )
+        final_answer = synth["content"]
+
+    total_ms     = int((time.time() - started) * 1000)
+    workers_ok   = sum(1 for r in all_results.values() if r.get("success"))
+    workers_fail = len(all_results) - workers_ok
+
+    print(f"[Supervisor] ✅ Done in {total_ms}ms | {workers_ok}/{len(all_results)} workers OK")
+
+    return {
+        "mission_id":    mission_id,
+        "status":        "success" if workers_fail == 0 else "partial",
+        "goal":          plan.get("goal", mission),
+        "reasoning":     plan.get("reasoning", ""),
+        "waves":         waves_trace,
+        "workers":       list(all_results.values()),
+        "final_answer":  final_answer,
+        "workers_ok":    workers_ok,
+        "workers_failed": workers_fail,
+        "total_workers": len(all_results),
+        "duration_ms":   total_ms,
+    }
+
+
 # ─── Models ───────────────────────────────────────────────────────────────
 
 class ThinkRequest(BaseModel):
@@ -969,6 +1311,13 @@ class CriticRequest(BaseModel):
 class RollbackRequest(BaseModel):
     rollback_action: str
     timeout:         int = 15
+
+
+class SuperviseRequest(BaseModel):
+    mission:          str
+    max_workers:      int = 5
+    timeout_per_step: int = 60
+    mission_type:     str = "general"
 
 
 class CompressRequest(BaseModel):
@@ -1150,6 +1499,28 @@ async def react(req: ReActRequest):
     )
 
 
+@app.post("/supervise")
+async def supervise(req: SuperviseRequest):
+    """
+    Supervisor/Workers parallèles — décompose, exécute en vagues, synthétise.
+
+    Le Superviseur décompose la mission en workers indépendants ou dépendants,
+    les exécute en vagues parallèles (via asyncio.gather + DAG topologique),
+    puis synthétise les résultats en une réponse unifiée.
+
+    Corps :
+      mission          — la tâche à accomplir
+      max_workers      — nombre max de workers parallèles (défaut: 5)
+      timeout_per_step — secondes max par worker (défaut: 60)
+      mission_type     — contexte domaine (défaut: general)
+    """
+    return await supervise_loop(
+        mission=req.mission,
+        max_workers=req.max_workers,
+        timeout_per_step=req.timeout_per_step,
+    )
+
+
 @app.post("/raw")
 async def raw_llm(req: dict):
     result = await llm(
@@ -1179,9 +1550,11 @@ async def health():
         "claude_model": CLAUDE_MODEL if claude_ok else None,
         "circuit_breakers": {k: {"failures": v, "open": v >= _PROVIDER_MAX_FAILURES} for k, v in _provider_failures.items()},
         "circuit_reset_count": _circuit_reset_count,
-        "react_enabled":  True,
-        "critic_enabled": True,
-        "react_max_steps_default": 15,
+        "react_enabled":      True,
+        "critic_enabled":     True,
+        "supervisor_enabled": True,
+        "react_max_steps_default":    15,
+        "supervisor_max_workers_default": 5,
     }
 
 
