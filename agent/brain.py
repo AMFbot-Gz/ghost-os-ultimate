@@ -1,12 +1,14 @@
 """
 Couche cerveau — port 8003
-Claude API · MLX · Ollama · routing modèles · compression contexte · planification
+Claude API · MLX · Ollama · routing modèles · compression contexte · planification · ReAct loop
 Provider : Claude API (claude-opus-4-6) · Fallback cloud : Kimi → OpenAI
 """
 import asyncio
 import httpx
 import json
 import os
+import time
+import uuid
 import subprocess
 from datetime import datetime
 from pathlib import Path
@@ -24,11 +26,85 @@ with open(ROOT / "agent_config.yml") as f:
 
 app = FastAPI(title="PICO-RUCHE Brain", version="1.0.0")
 
-OLLAMA_URL = CONFIG["ollama"]["base_url"]
-MLX_URL = CONFIG["mlx"]["server_url"]
-MODELS = CONFIG["ollama"]["models"]
-COMPRESS_THRESHOLD = CONFIG["brain"]["compress_threshold"]
-CLAUDE_MODEL = "claude-opus-4-6"
+OLLAMA_URL        = CONFIG["ollama"]["base_url"]
+MLX_URL           = CONFIG["mlx"]["server_url"]
+MODELS            = CONFIG["ollama"]["models"]
+COMPRESS_THRESHOLD= CONFIG["brain"]["compress_threshold"]
+CLAUDE_MODEL      = "claude-opus-4-6"
+
+# URLs des services internes (utilisés par la boucle ReAct)
+_PORTS            = CONFIG["ports"]
+EXECUTOR_URL      = f"http://localhost:{_PORTS['executor']}"
+PERCEPTION_URL    = f"http://localhost:{_PORTS['perception']}"
+MEMORY_URL        = f"http://localhost:{_PORTS['memory']}"
+
+# ─── Prompt système ReAct ──────────────────────────────────────────────────
+REACT_SYSTEM_PROMPT = """Tu es le cerveau de Ghost OS Ultimate v2.0 en mode ReAct (Reason + Act).
+
+IMPORTANT : Tu dois OBLIGATOIREMENT exécuter des actions réelles avant de dire "done".
+Ne dis jamais "done" sans avoir d'abord effectué au moins une action shell ou vision.
+Tu ne connais pas l'état du système — tu dois l'observer en exécutant des commandes.
+
+À chaque étape, réponds UNIQUEMENT avec ce format exact (une seule étape par réponse) :
+
+Thought: <raisonnement court — 1 à 2 phrases>
+Action: <shell|vision|memory_search|done>
+Action Input: <contenu selon l'action>
+
+ACTIONS :
+- shell         → commande bash exacte (ex: ls ~/Documents)
+- vision        → observe l'écran (Action Input: observe)
+- memory_search → cherche dans les souvenirs passés (ex: commande erreur)
+- done          → SEULEMENT après avoir vérifié le résultat via shell ou vision
+
+EXEMPLE :
+Mission: Crée un fichier test.txt dans Documents
+
+Thought: Je dois créer le fichier avec echo ou touch.
+Action: shell
+Action Input: echo "contenu" > ~/Documents/test.txt
+
+[Observation reçue]
+
+Thought: Le fichier a été créé, je dois vérifier qu'il existe.
+Action: shell
+Action Input: cat ~/Documents/test.txt
+
+[Observation reçue]
+
+Thought: Le fichier existe et contient le bon contenu. Mission accomplie.
+Action: done
+Action Input: Fichier test.txt créé dans Documents avec le contenu "contenu".
+
+CONTRAINTES :
+- Une seule Action par réponse
+- Ne répète JAMAIS la même Action Input deux fois de suite
+- Si une commande échoue, essaie une alternative différente
+- Toujours vérifier le résultat avant "done\""""
+
+# ─── Prompt Critic ────────────────────────────────────────────────────────
+CRITIC_SYSTEM_PROMPT = """Tu es un Critic pour Ghost OS Ultimate. Tu évalues si une action a produit le résultat attendu.
+
+Réponds UNIQUEMENT en JSON valide, sans markdown :
+
+{
+  "verdict": "ok|retry|abort",
+  "reason": "explication courte (1 phrase)",
+  "confidence": 0.0-1.0,
+  "rollback_needed": true|false,
+  "rollback_action": "commande bash pour annuler, ou null"
+}
+
+RÈGLES verdict :
+- "ok"    → l'action a réussi ou est acceptable (returncode 0, output cohérent avec l'objectif)
+- "retry" → l'action a échoué mais est corrigeable (erreur mineure, path incorrect, permission manquante)
+- "abort" → l'action a causé un dommage ou un état incohérent → rollback nécessaire
+
+RÈGLES rollback_needed :
+- true  SEULEMENT si l'action a modifié l'état du système (fichier créé/modifié/supprimé, app ouverte) ET a échoué partiellement
+- false si l'action est en lecture seule (ls, cat, ps, curl GET, vision) ou si elle a totalement réussi
+
+rollback_action : commande bash exacte pour annuler, ou null si pas de rollback possible/nécessaire"""
 
 # ─── Provider-agnostic model config (format vendor/model, inspiré PicoClaw) ──
 GHOST_MODEL = os.environ.get('GHOST_MODEL', '')  # ex: 'anthropic/claude-opus-4-6'
@@ -118,8 +194,11 @@ async def call_mlx(messages: list, system: str = "") -> str:
         return r.json()["choices"][0]["message"]["content"]
 
 
-async def call_claude(messages: list, system: str = "") -> str:
-    """Appelle Claude API (claude-opus-4-6) avec adaptive thinking."""
+async def call_claude(messages: list, system: str = "", thinking: bool = True) -> str:
+    """Appelle Claude API (claude-opus-4-6).
+    thinking=True  → adaptive thinking (planification, analyse)
+    thinking=False → mode direct, format strict (ReAct)
+    """
     import anthropic
     key = os.environ.get("ANTHROPIC_API_KEY", "")
     if not key:
@@ -127,14 +206,15 @@ async def call_claude(messages: list, system: str = "") -> str:
     client = anthropic.AsyncAnthropic(api_key=key)
     kwargs = {
         "model": CLAUDE_MODEL,
-        "max_tokens": 4096,
+        "max_tokens": 2048,
         "messages": messages,
-        "thinking": {"type": "adaptive"},
     }
+    if thinking:
+        kwargs["thinking"] = {"type": "adaptive"}
+        kwargs["max_tokens"] = 4096
     if system:
         kwargs["system"] = system
     response = await client.messages.create(**kwargs)
-    # Extraire uniquement les blocs texte (ignorer les blocs thinking)
     text = next((b.text for b in response.content if b.type == "text"), "")
     if not text.strip():
         raise ValueError("Claude a retourné une réponse vide (aucun bloc texte)")
@@ -303,6 +383,25 @@ async def llm(role: str, messages: list, system: str = "") -> dict:
     raise RuntimeError("Tous les providers cloud ont échoué — vérifier ANTHROPIC_API_KEY dans .env")
 
 
+async def llm_react(messages: list, system: str = "") -> dict:
+    """LLM spécialisé pour la boucle ReAct — sans adaptive thinking pour forcer
+    le format Thought/Action/Action Input étape par étape (pas de hallucination)."""
+    if claude_available() and _provider_failures.get("claude", 0) < _PROVIDER_MAX_FAILURES:
+        try:
+            content = await call_claude(messages, system, thinking=False)
+            _provider_failures["claude"] = 0
+            return {"content": content, "provider": "claude", "model": CLAUDE_MODEL}
+        except Exception as e:
+            _provider_failures["claude"] = _provider_failures.get("claude", 0) + 1
+            print(f"[Brain/ReAct] Claude failed: {e}")
+    # Fallback Ollama
+    try:
+        content = await call_ollama(MODELS.get("strategist", "llama3:latest"), messages, system)
+        return {"content": content, "provider": "ollama", "model": MODELS.get("strategist")}
+    except Exception as e:
+        raise RuntimeError(f"llm_react: tous les providers ont échoué — {e}")
+
+
 async def compress_context(messages: list) -> str:
     history = "\n".join([f"{m['role']}: {m['content']}" for m in messages])
     prompt = [{"role": "user", "content": f"Résume en moins de 400 tokens. Garde: décisions, erreurs, état actuel, prochaine étape. Supprime: répétitions, politesses.\n\n{history}"}]
@@ -360,32 +459,516 @@ async def _async_load_skills_list() -> str:
         return ""
 
 
-async def load_recent_learnings() -> str:
-    """Charge les 3 derniers épisodes mémoire pour éviter de répéter les erreurs (C1)."""
+async def load_recent_learnings(mission_hint: str = "") -> str:
+    """Charge les épisodes mémoire pertinents pour la mission en cours.
+    Si mission_hint fourni → recherche sémantique ChromaDB (épisodes similaires).
+    Sinon → 3 derniers épisodes (fallback temporel).
+    """
     try:
-        async with httpx.AsyncClient(timeout=8) as c:
-            r = await c.get(f"http://localhost:{CONFIG['ports']['memory']}/episodes?limit=3")
-            r.raise_for_status()
-            episodes = r.json().get("episodes", [])
+        async with httpx.AsyncClient(timeout=10) as c:
+            if mission_hint:
+                # Recherche sémantique — épisodes proches de la mission actuelle
+                r = await c.post(
+                    f"http://localhost:{CONFIG['ports']['memory']}/semantic_search",
+                    json={"query": mission_hint, "n_results": 4, "min_similarity": 0.45},
+                )
+                r.raise_for_status()
+                data     = r.json()
+                results  = data.get("results", [])
+                method   = "sémantique" if data.get("chroma_ready") else "récents"
+                episodes = []
+                for hit in results:
+                    ep = hit.get("episode") or {
+                        "mission": hit.get("document", "")[:80],
+                        "result":  "",
+                        "success": hit.get("success", False),
+                    }
+                    ep["_similarity"] = hit.get("similarity", 0)
+                    episodes.append(ep)
+            else:
+                r = await c.get(f"http://localhost:{CONFIG['ports']['memory']}/episodes?limit=3")
+                r.raise_for_status()
+                episodes = r.json().get("episodes", [])
+                method   = "récents"
+
         if not episodes:
             return ""
-        lines = ["Apprentissages récents (prends-les en compte):"]
+        lines = [f"Apprentissages {method} (prends-les en compte):"]
         for ep in episodes:
             flag = "✓" if ep.get("success") else "✗"
-            mission_short = ep.get("mission", "")[:70]
-            result_short = ep.get("result", "")[:80]
-            lines.append(f"  {flag} {mission_short} → {result_short}")
+            sim  = f" [{ep['_similarity']:.2f}]" if ep.get("_similarity") else ""
+            lines.append(f"  {flag}{sim} {ep.get('mission','')[:60]} → {ep.get('result','')[:70]}")
         return "\n".join(lines)
     except Exception as e:
-        print(f"[Brain] load_recent_learnings error (couche memory indisponible): {e}")
+        print(f"[Brain] load_recent_learnings error: {e}")
         return ""
 
+
+# ─── ReAct helpers ────────────────────────────────────────────────────────
+
+def _parse_react_step(text: str) -> dict:
+    """Parse une réponse ReAct → {thought, action, action_input}.
+    Tolère les variantes de casse et les espaces superflus.
+    """
+    thought = action = action_input = ""
+    lines = text.strip().splitlines()
+    capturing_input = False
+    for line in lines:
+        if line.lower().startswith("thought:"):
+            thought = line.split(":", 1)[1].strip()
+            capturing_input = False
+        elif line.lower().startswith("action input:"):
+            action_input = line.split(":", 1)[1].strip()
+            capturing_input = True
+        elif line.lower().startswith("action:") and "input" not in line.lower():
+            action = line.split(":", 1)[1].strip().lower()
+            capturing_input = False
+        elif capturing_input and line.strip():
+            # Ligne de suite pour Action Input multi-ligne
+            action_input += " " + line.strip()
+
+    # Fallback : si rien parsé, on traite le bloc entier comme pensée
+    if not action:
+        action = "done"
+    if not action_input and action == "done":
+        action_input = text.strip()[:300]
+
+    return {"thought": thought, "action": action, "action_input": action_input}
+
+
+async def _execute_react_action(action: str, action_input: str, step_timeout: int) -> dict:
+    """Dispatch une action ReAct vers le bon service et retourne l'observation."""
+    try:
+        async with httpx.AsyncClient(timeout=step_timeout) as client:
+
+            if action == "shell":
+                r = await client.post(
+                    f"{EXECUTOR_URL}/shell",
+                    json={"command": action_input},   # champ "command" (pas "cmd")
+                )
+                r.raise_for_status()
+                data = r.json()
+                if data.get("blocked"):
+                    return {"ok": False, "output": f"[BLOQUÉ] {data.get('block_reason', 'commande interdite')}"}
+                out = (data.get("stdout", "") + data.get("stderr", "")).strip()
+                return {"ok": data.get("returncode", 1) == 0, "output": out[:2000] or "(aucune sortie)"}
+
+            elif action == "vision":
+                r = await client.post(f"{PERCEPTION_URL}/observe")
+                r.raise_for_status()
+                obs = r.json()
+                screen = obs.get("screen", {})
+                sys_info = obs.get("system", {})
+                summary = (
+                    f"Écran: {'changé' if screen.get('changed') else 'identique'} | "
+                    f"CPU: {sys_info.get('cpu_percent', '?')}% | "
+                    f"RAM: {sys_info.get('ram_percent', '?')}% | "
+                    f"Screenshot: {screen.get('path', 'N/A')}"
+                )
+                return {"ok": True, "output": summary}
+
+            elif action == "memory_search":
+                # Recherche sémantique ChromaDB → fallback mots-clés si indisponible
+                r = await client.post(
+                    f"{MEMORY_URL}/semantic_search",
+                    json={"query": action_input, "n_results": 4, "min_similarity": 0.4},
+                )
+                r.raise_for_status()
+                data = r.json()
+                results = data.get("results", [])
+                method  = "sémantique" if data.get("chroma_ready") else "mots-clés"
+                if not results:
+                    return {"ok": True, "output": "Aucun souvenir pertinent trouvé."}
+                lines = [f"[Mémoire {method}]"]
+                for hit in results[:3]:
+                    flag = "✓" if hit.get("success") else "✗"
+                    sim  = f" ({hit.get('similarity', 0):.2f})" if hit.get("similarity") else ""
+                    doc  = hit.get("document", "")[:80]
+                    lines.append(f"  {flag}{sim} {doc}")
+                return {"ok": True, "output": "\n".join(lines)}
+
+            elif action == "done":
+                return {"ok": True, "output": action_input}
+
+            else:
+                return {"ok": False, "output": f"Action inconnue: '{action}' — utilise shell|vision|memory_search|done"}
+
+    except httpx.TimeoutException:
+        return {"ok": False, "output": f"[TIMEOUT {step_timeout}s] Le service ne répond pas."}
+    except Exception as e:
+        return {"ok": False, "output": f"[ERREUR] {type(e).__name__}: {str(e)[:200]}"}
+
+
+# ─── Critic + Rollback ────────────────────────────────────────────────────
+
+# Actions en lecture seule — le critic ne génère jamais de rollback pour celles-ci
+_READ_ONLY_PATTERNS = (
+    "ls ", "ls\n", "cat ", "head ", "tail ", "wc ", "find ", "grep ",
+    "ps ", "top ", "df ", "du ", "which ", "echo ", "pwd",
+    "curl -s", "curl --silent", "git status", "git log", "git diff",
+    "open -a", "osascript -e 'tell application",   # ouvertures app (réversibles facilement)
+)
+
+# Patterns shell → rollback inverse automatique (avant de demander au LLM)
+_ROLLBACK_PATTERNS = [
+    # Écriture fichier : echo "..." > file  →  rm file
+    (r'^echo .+ > (.+)$',           lambda m: f"rm -f {m.group(1)}"),
+    # Append fichier : echo "..." >> file  →  (pas de rollback exact, on notifie)
+    (r'^echo .+ >> (.+)$',          lambda m: None),
+    # Création fichier : touch file  →  rm file
+    (r'^touch (.+)$',               lambda m: f"rm -f {m.group(1)}"),
+    # Mkdir : mkdir ...  →  rmdir
+    (r'^mkdir(?:\s+-p)?\s+(.+)$',   lambda m: f"rmdir '{m.group(1).strip()}' 2>/dev/null || rm -rf '{m.group(1).strip()}'"),
+    # Move : mv src dst  →  mv dst src
+    (r'^mv\s+(\S+)\s+(\S+)$',       lambda m: f"mv {m.group(2)} {m.group(1)}"),
+    # Copy : cp src dst  →  rm dst
+    (r'^cp(?:\s+-r)?\s+\S+\s+(\S+)$', lambda m: f"rm -f {m.group(1)}"),
+    # pip install  →  pip uninstall
+    (r'^pip3?\s+install\s+(\S+)',   lambda m: f"pip3 uninstall -y {m.group(1)}"),
+    # npm install  →  npm uninstall
+    (r'^npm\s+install\s+(\S+)',     lambda m: f"npm uninstall {m.group(1)}"),
+]
+
+
+def _auto_rollback_cmd(action_input: str) -> Optional[str]:
+    """Génère un rollback bash par pattern matching rapide (sans LLM)."""
+    import re
+    cmd = action_input.strip()
+    for pattern, generator in _ROLLBACK_PATTERNS:
+        m = re.match(pattern, cmd, re.IGNORECASE)
+        if m:
+            result = generator(m)
+            return result  # peut être None si pas de rollback exact
+    return None
+
+
+def _is_read_only(action_input: str) -> bool:
+    """True si la commande est en lecture seule (rollback inutile)."""
+    cmd = action_input.strip().lower()
+    return any(cmd.startswith(p.lower()) for p in _READ_ONLY_PATTERNS)
+
+
+async def critic_evaluate(
+    goal: str,
+    action: str,
+    action_input: str,
+    observation: str,
+    step_num: int,
+    exec_success: bool,
+) -> dict:
+    """Évalue le résultat d'une action et retourne un verdict structuré.
+
+    Retourne :
+        verdict        : "ok" | "retry" | "abort"
+        reason         : explication courte
+        confidence     : float 0-1
+        rollback_needed: bool
+        rollback_action: str | None
+    """
+    # Lecture seule ou action non-shell → ok rapide sans LLM
+    if action in ("vision", "memory_search", "done"):
+        return {"verdict": "ok", "reason": "action passive", "confidence": 1.0,
+                "rollback_needed": False, "rollback_action": None}
+
+    if action == "shell" and _is_read_only(action_input) and exec_success:
+        return {"verdict": "ok", "reason": "commande lecture seule réussie", "confidence": 0.95,
+                "rollback_needed": False, "rollback_action": None}
+
+    # Échec executor immédiat sans sortie utile → retry direct
+    if not exec_success and ("[BLOQUÉ]" in observation or "[TIMEOUT" in observation):
+        return {"verdict": "retry", "reason": observation[:120], "confidence": 0.9,
+                "rollback_needed": False, "rollback_action": None}
+
+    # Tentative de rollback auto avant d'appeler le LLM
+    auto_rb = _auto_rollback_cmd(action_input) if not exec_success else None
+
+    prompt = f"""Objectif global : {goal}
+Étape {step_num} — action executée :
+  Type    : {action}
+  Commande: {action_input}
+  Succès  : {exec_success}
+  Résultat: {observation[:600]}
+
+Évalue si le résultat correspond à l'objectif et retourne le JSON demandé."""
+
+    try:
+        result = await llm_react(
+            [{"role": "user", "content": prompt}],
+            CRITIC_SYSTEM_PROMPT,
+        )
+        raw = result["content"].strip()
+        # Extraire le JSON
+        start = raw.find("{")
+        end   = raw.rfind("}") + 1
+        verdict_dict = json.loads(raw[start:end]) if start != -1 else {}
+    except Exception as e:
+        print(f"[Critic] LLM error: {e} — fallback heuristique")
+        # Fallback heuristique si le LLM échoue
+        verdict_dict = {}
+
+    # Valeurs par défaut + validation
+    verdict   = verdict_dict.get("verdict", "ok" if exec_success else "retry")
+    reason    = verdict_dict.get("reason", "évaluation heuristique")
+    confidence = float(verdict_dict.get("confidence", 0.7 if exec_success else 0.5))
+    rb_needed = bool(verdict_dict.get("rollback_needed", False))
+    rb_action = verdict_dict.get("rollback_action") or auto_rb
+
+    # Sécurité : jamais rollback si la commande originale était en lecture seule
+    if _is_read_only(action_input):
+        rb_needed = False
+        rb_action = None
+
+    return {
+        "verdict":        verdict,
+        "reason":         reason,
+        "confidence":     confidence,
+        "rollback_needed": rb_needed,
+        "rollback_action": rb_action,
+    }
+
+
+async def _execute_rollback(rollback_action: str, timeout: int = 15) -> dict:
+    """Exécute une action de rollback via executor :8004."""
+    print(f"[Critic/Rollback] 🔄 Rollback: {rollback_action[:80]}")
+    try:
+        async with httpx.AsyncClient(timeout=timeout) as client:
+            r = await client.post(
+                f"{EXECUTOR_URL}/shell",
+                json={"command": rollback_action},
+            )
+            r.raise_for_status()
+            data = r.json()
+            ok = data.get("returncode", 1) == 0 and not data.get("blocked")
+            out = (data.get("stdout", "") + data.get("stderr", "")).strip()
+            print(f"[Critic/Rollback] {'✅' if ok else '❌'} {out[:80]}")
+            return {"ok": ok, "output": out[:500]}
+    except Exception as e:
+        print(f"[Critic/Rollback] Erreur: {e}")
+        return {"ok": False, "output": str(e)[:200]}
+
+
+async def react_loop(
+    mission: str,
+    max_steps: int = 15,
+    mission_type: str = "general",
+    timeout_per_step: int = 60,
+) -> dict:
+    """
+    Boucle ReAct complète : Reason → Act → Observe → repeat.
+    Retourne le trace complet + réponse finale.
+    """
+    started = time.time()
+    mission_id = uuid.uuid4().hex[:8]
+    steps_trace = []
+    last_action_input = None  # anti-boucle infinie
+    repeat_count = 0
+    rollback_stack: List[dict] = []  # historique des rollbacks exécutés
+
+    # Contexte enrichi (skills + mémoire récente) — même logique que /think
+    skills_ctx, learnings_ctx = await asyncio.gather(
+        _async_load_skills_list(),
+        load_recent_learnings(),
+        return_exceptions=True,
+    )
+    skills_ctx    = skills_ctx    if isinstance(skills_ctx, str)    else ""
+    learnings_ctx = learnings_ctx if isinstance(learnings_ctx, str) else ""
+
+    extra = ""
+    if skills_ctx:
+        extra += f"\n\n{skills_ctx}"
+    if learnings_ctx:
+        extra += f"\n\n{learnings_ctx}"
+
+    system = REACT_SYSTEM_PROMPT + extra
+
+    # Historique de conversation — s'allonge à chaque tour
+    messages: List[dict] = [{"role": "user", "content": f"Mission: {mission}"}]
+
+    print(f"[Brain/ReAct] 🚀 Démarrage mission={mission_id} max_steps={max_steps}")
+
+    for step_num in range(1, max_steps + 1):
+        step_start = time.time()
+        print(f"[Brain/ReAct] ── Étape {step_num}/{max_steps}")
+
+        # Compression si le contexte grossit trop
+        total_text = " ".join(m.get("content", "") for m in messages)
+        if estimate_tokens(total_text) > COMPRESS_THRESHOLD:
+            print(f"[Brain/ReAct] Compression contexte ({estimate_tokens(total_text)} tokens)")
+            compressed = await compress_context(messages)
+            messages = [
+                {"role": "user",      "content": f"Mission: {mission}"},
+                {"role": "assistant", "content": f"[Contexte résumé]: {compressed}"},
+            ]
+
+        # ── Reason ────────────────────────────────────────────────────────
+        try:
+            result = await llm_react(messages, system)
+        except Exception as e:
+            error_msg = f"[Brain/ReAct] LLM error à l'étape {step_num}: {e}"
+            print(error_msg)
+            steps_trace.append({
+                "step": step_num, "thought": "", "action": "error",
+                "action_input": "", "observation": error_msg,
+                "success": False, "duration_ms": int((time.time() - step_start) * 1000),
+            })
+            break
+
+        raw = result["content"].strip()
+        parsed = _parse_react_step(raw)
+        thought      = parsed["thought"]
+        action       = parsed["action"]
+        action_input = parsed["action_input"]
+
+        print(f"[Brain/ReAct]   Thought: {thought[:80]}")
+        print(f"[Brain/ReAct]   Action:  {action} | Input: {action_input[:80]}")
+
+        # Anti-boucle : même action_input 3 fois → forcer done
+        if action_input == last_action_input:
+            repeat_count += 1
+            if repeat_count >= 3:
+                print(f"[Brain/ReAct] ⚠️  Boucle détectée ({repeat_count}x '{action_input[:40]}') → arrêt forcé")
+                action = "done"
+                action_input = f"Arrêt anti-boucle après {step_num} étapes. Dernière action: {action_input}"
+        else:
+            repeat_count = 0
+        last_action_input = action_input
+
+        # ── Act + Observe ──────────────────────────────────────────────────
+        obs = await _execute_react_action(action, action_input, timeout_per_step)
+        observation = obs["output"]
+        success     = obs["ok"]
+
+        # ── Critic ─────────────────────────────────────────────────────────
+        critic = None
+        rollback_result = None
+        if action not in ("done", "memory_search"):
+            critic = await critic_evaluate(
+                goal=mission,
+                action=action,
+                action_input=action_input,
+                observation=observation,
+                step_num=step_num,
+                exec_success=success,
+            )
+            print(f"[Critic] verdict={critic['verdict']} conf={critic['confidence']:.2f} | {critic['reason'][:60]}")
+
+            # ── Auto-rollback si verdict=abort ─────────────────────────────
+            if critic["verdict"] == "abort" and critic.get("rollback_needed") and critic.get("rollback_action"):
+                rollback_result = await _execute_rollback(critic["rollback_action"], timeout=15)
+                rollback_stack.append({
+                    "step":            step_num,
+                    "original_action": action_input,
+                    "rollback_action": critic["rollback_action"],
+                    "rollback_ok":     rollback_result["ok"],
+                    "rollback_output": rollback_result["output"],
+                })
+
+        step_ms = int((time.time() - step_start) * 1000)
+        step_record = {
+            "step":         step_num,
+            "thought":      thought,
+            "action":       action,
+            "action_input": action_input,
+            "observation":  observation,
+            "success":      success,
+            "duration_ms":  step_ms,
+        }
+        if critic:
+            step_record["critic"] = {
+                "verdict":    critic["verdict"],
+                "reason":     critic["reason"],
+                "confidence": critic["confidence"],
+            }
+        if rollback_result:
+            step_record["rollback"] = {
+                "action": critic["rollback_action"],
+                "ok":     rollback_result["ok"],
+                "output": rollback_result["output"][:200],
+            }
+        steps_trace.append(step_record)
+
+        print(f"[Brain/ReAct]   Obs ({step_ms}ms): {observation[:100]}")
+
+        # ── Fin si done ────────────────────────────────────────────────────
+        if action == "done":
+            print(f"[Brain/ReAct] ✅ Mission terminée en {step_num} étape(s)")
+            return {
+                "mission_id":   mission_id,
+                "status":       "success",
+                "steps":        steps_trace,
+                "final_answer": action_input,
+                "steps_taken":  step_num,
+                "rollbacks":    rollback_stack,
+                "provider":     result["provider"],
+                "model":        result["model"],
+                "duration_ms":  int((time.time() - started) * 1000),
+            }
+
+        # ── Message contexte pour le prochain tour ─────────────────────────
+        messages.append({"role": "assistant", "content": raw})
+
+        # Enrichir le message d'observation avec le verdict du critic
+        obs_suffix = ""
+        if critic:
+            if critic["verdict"] == "abort":
+                rb_msg = f" Rollback exécuté : {critic['rollback_action']}" if rollback_result else ""
+                obs_suffix = f" [CRITIC ABORT — {critic['reason']}{rb_msg} — change d'approche]"
+            elif critic["verdict"] == "retry":
+                obs_suffix = f" [CRITIC RETRY — {critic['reason']} — essaie autrement]"
+            # verdict ok → pas de suffix
+
+        if not success and not obs_suffix:
+            obs_suffix = " [ÉCHEC — essaie autrement]"
+
+        messages.append({
+            "role":    "user",
+            "content": f"Observation: {observation}{obs_suffix}",
+        })
+
+    # max_steps atteint sans done
+    final = steps_trace[-1]["observation"] if steps_trace else "Aucun résultat"
+    print(f"[Brain/ReAct] ⚠️  max_steps={max_steps} atteint")
+    return {
+        "mission_id":   mission_id,
+        "status":       "max_steps_reached",
+        "steps":        steps_trace,
+        "final_answer": final,
+        "steps_taken":  max_steps,
+        "rollbacks":    rollback_stack,
+        "provider":     "claude",
+        "model":        CLAUDE_MODEL,
+        "duration_ms":  int((time.time() - started) * 1000),
+    }
+
+
+# ─── Models ───────────────────────────────────────────────────────────────
 
 class ThinkRequest(BaseModel):
     mission: str
     history: List[dict] = []
     mission_type: str = "code"
     role: str = "strategist"
+
+
+class ReActRequest(BaseModel):
+    mission: str
+    max_steps: int = 15
+    mission_type: str = "general"
+    timeout_per_step: int = 60
+
+
+class CriticRequest(BaseModel):
+    goal:          str
+    action:        str                  # shell | vision | memory_search
+    action_input:  str
+    observation:   str
+    step_num:      int   = 1
+    exec_success:  bool  = True
+
+
+class RollbackRequest(BaseModel):
+    rollback_action: str
+    timeout:         int = 15
 
 
 class CompressRequest(BaseModel):
@@ -401,11 +984,11 @@ async def think(req: ThinkRequest):
         compressed = await compress_context(messages)
         messages = [{"role": "assistant", "content": f"[Contexte résumé]: {compressed}"}]
 
-    # C1 — contexte enrichi : domain + skills + mémoire récente (en parallèle)
+    # C1 — contexte enrichi : domain + skills + mémoire sémantique (en parallèle)
     domain_ctx, skills_ctx, learnings_ctx = await asyncio.gather(
         _async_load_domain_context(req.mission_type),
         _async_load_skills_list(),
-        load_recent_learnings(),
+        load_recent_learnings(mission_hint=req.mission),   # sémantique si ChromaDB dispo
         return_exceptions=True,
     )
     domain_ctx   = domain_ctx   if isinstance(domain_ctx, str)   else ""
@@ -521,6 +1104,52 @@ async def compress(req: CompressRequest):
     }
 
 
+@app.post("/critic")
+async def critic_endpoint(req: CriticRequest):
+    """Critic standalone — évalue une action/observation sans boucle ReAct.
+
+    Utile pour tester le critic ou l'intégrer dans un pipeline externe.
+    """
+    result = await critic_evaluate(
+        goal=req.goal,
+        action=req.action,
+        action_input=req.action_input,
+        observation=req.observation,
+        step_num=req.step_num,
+        exec_success=req.exec_success,
+    )
+    return result
+
+
+@app.post("/rollback")
+async def rollback_endpoint(req: RollbackRequest):
+    """Exécute un rollback bash via executor :8004."""
+    result = await _execute_rollback(req.rollback_action, req.timeout)
+    return result
+
+
+@app.post("/react")
+async def react(req: ReActRequest):
+    """
+    Boucle ReAct complète — Reason → Act → Observe → repeat.
+
+    Contrairement à /think (planifie une fois + exécute), /react boucle
+    jusqu'à atteindre l'objectif ou max_steps.
+
+    Corps :
+      mission          — la tâche à accomplir
+      max_steps        — nombre max d'itérations (défaut: 15)
+      mission_type     — contexte domaine (défaut: general)
+      timeout_per_step — secondes max par action (défaut: 60)
+    """
+    return await react_loop(
+        mission=req.mission,
+        max_steps=req.max_steps,
+        mission_type=req.mission_type,
+        timeout_per_step=req.timeout_per_step,
+    )
+
+
 @app.post("/raw")
 async def raw_llm(req: dict):
     result = await llm(
@@ -550,6 +1179,9 @@ async def health():
         "claude_model": CLAUDE_MODEL if claude_ok else None,
         "circuit_breakers": {k: {"failures": v, "open": v >= _PROVIDER_MAX_FAILURES} for k, v in _provider_failures.items()},
         "circuit_reset_count": _circuit_reset_count,
+        "react_enabled":  True,
+        "critic_enabled": True,
+        "react_max_steps_default": 15,
     }
 
 

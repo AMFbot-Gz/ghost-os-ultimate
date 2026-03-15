@@ -1,16 +1,24 @@
 """
 Couche mémoire — port 8006
-Mémoire épisodique JSONL + mémoire persistante + world state
+Mémoire épisodique JSONL + ChromaDB sémantique + world state
+
+Architecture :
+  - JSONL            → source de vérité, lecture rapide, append-only
+  - ChromaDB         → index vectoriel pour recherche sémantique (nomic-embed-text via Ollama)
+  - Fallback         → si ChromaDB indisponible, retour à la recherche par mots-clés
+  - World state      → JSON partagé entre les couches
 """
 import json
 import os
 import asyncio
 import tempfile
+import hashlib
 from datetime import datetime
 from pathlib import Path
 from fastapi import FastAPI
 from pydantic import BaseModel
 from typing import Optional, List, Any
+import httpx
 import yaml
 from dotenv import load_dotenv
 load_dotenv()
@@ -20,59 +28,238 @@ ROOT = Path(__file__).resolve().parent.parent
 with open(ROOT / "agent_config.yml") as f:
     CONFIG = yaml.safe_load(f)
 
-app = FastAPI(title="PICO-RUCHE Memory", version="1.0.0")
+app = FastAPI(title="PICO-RUCHE Memory", version="2.0.0")
 
-EPISODE_FILE = ROOT / CONFIG["memory"]["episode_file"]
-PERSISTENT_FILE = ROOT / CONFIG["memory"]["persistent_file"]
+EPISODE_FILE     = ROOT / CONFIG["memory"]["episode_file"]
+PERSISTENT_FILE  = ROOT / CONFIG["memory"]["persistent_file"]
 WORLD_STATE_FILE = ROOT / CONFIG["memory"]["world_state_file"]
-MAX_EPISODES = CONFIG["memory"]["max_episodes"]
+MAX_EPISODES     = CONFIG["memory"]["max_episodes"]
+OLLAMA_URL       = CONFIG["ollama"]["base_url"]
+EMBED_MODEL      = "nomic-embed-text"
+CHROMA_DIR       = ROOT / "agent" / "memory" / "chromadb"
+CHROMA_COLLECTION= "ghost_os_episodes"
 
 EPISODE_FILE.parent.mkdir(parents=True, exist_ok=True)
+CHROMA_DIR.mkdir(parents=True, exist_ok=True)
 if not EPISODE_FILE.exists():
     EPISODE_FILE.write_text("")
 if not WORLD_STATE_FILE.exists():
     WORLD_STATE_FILE.write_text("{}")
 
-# CORRECTION 1 — Verrou asyncio pour protéger EPISODE_FILE contre les
-# accès concurrents (race condition en lecture/écriture/trim).
-_FILE_LOCK = asyncio.Lock()
-
-# CORRECTION 2 — Compteur de lignes JSON corrompues détectées.
+_FILE_LOCK       = asyncio.Lock()
 _corruption_count = 0
 
+# ─── ChromaDB — init non-bloquant ─────────────────────────────────────────
+
+_chroma_client     = None
+_chroma_collection = None
+_chroma_ready      = False
+
+
+def _init_chroma() -> bool:
+    """Initialise ChromaDB avec stockage persistant local.
+    Retourne True si succès, False si ChromaDB indisponible (dégradé silencieux).
+    """
+    global _chroma_client, _chroma_collection, _chroma_ready
+    try:
+        import chromadb
+        _chroma_client = chromadb.PersistentClient(path=str(CHROMA_DIR))
+        _chroma_collection = _chroma_client.get_or_create_collection(
+            name=CHROMA_COLLECTION,
+            metadata={"hnsw:space": "cosine"},  # distance cosine pour la similarité sémantique
+        )
+        _chroma_ready = True
+        count = _chroma_collection.count()
+        print(f"[Memory] ✅ ChromaDB initialisé — {count} épisodes indexés dans '{CHROMA_COLLECTION}'")
+        return True
+    except Exception as e:
+        print(f"[Memory] ⚠️  ChromaDB indisponible (mode dégradé mots-clés): {e}")
+        _chroma_ready = False
+        return False
+
+
+async def _get_embedding(text: str) -> Optional[List[float]]:
+    """Génère un embedding via Ollama nomic-embed-text.
+    Retourne None si le modèle est indisponible (fallback silencieux).
+    """
+    try:
+        async with httpx.AsyncClient(timeout=30) as client:
+            r = await client.post(
+                f"{OLLAMA_URL}/api/embeddings",
+                json={"model": EMBED_MODEL, "prompt": text[:2000]},
+            )
+            r.raise_for_status()
+            embedding = r.json().get("embedding")
+            if not embedding:
+                return None
+            return embedding
+    except Exception as e:
+        print(f"[Memory] Embedding error: {e}")
+        return None
+
+
+def _episode_id(episode: dict) -> str:
+    """ID déterministe basé sur mission + timestamp (évite les doublons)."""
+    key = f"{episode.get('mission', '')}|{episode.get('timestamp', '')}"
+    return hashlib.sha256(key.encode()).hexdigest()[:16]
+
+
+def _episode_to_text(ep: dict) -> str:
+    """Concatène les champs pertinents pour l'embedding."""
+    parts = [
+        ep.get("mission", ""),
+        ep.get("result", ""),
+        ep.get("learned", "") or "",
+    ]
+    return " ".join(p for p in parts if p).strip()[:1500]
+
+
+async def _index_episode(episode: dict) -> bool:
+    """Indexe un épisode dans ChromaDB de manière asynchrone.
+    Retourne True si succès, False sinon (silencieux).
+    """
+    if not _chroma_ready or _chroma_collection is None:
+        return False
+    try:
+        text = _episode_to_text(episode)
+        if not text:
+            return False
+        embedding = await _get_embedding(text)
+        if not embedding:
+            return False
+
+        ep_id = _episode_id(episode)
+        # Métadonnées stockées pour reconstruction sans re-lire le JSONL
+        metadata = {
+            "timestamp":   episode.get("timestamp", ""),
+            "success":     str(episode.get("success", False)),
+            "duration_ms": str(episode.get("duration_ms", 0)),
+            "model_used":  episode.get("model_used", ""),
+            "machine_id":  episode.get("machine_id", ""),
+            "skills_used": ",".join(episode.get("skills_used", [])),
+        }
+
+        # upsert — évite les doublons si on ré-indexe
+        loop = asyncio.get_event_loop()
+        await loop.run_in_executor(
+            None,
+            lambda: _chroma_collection.upsert(
+                ids=[ep_id],
+                embeddings=[embedding],
+                documents=[text],
+                metadatas=[metadata],
+            )
+        )
+        return True
+    except Exception as e:
+        print(f"[Memory] Index error: {e}")
+        return False
+
+
+async def semantic_search(query: str, n_results: int = 5, min_similarity: float = 0.3) -> List[dict]:
+    """Recherche sémantique dans ChromaDB.
+    Retourne les épisodes JSONL correspondants par similarité cosine.
+    """
+    if not _chroma_ready or _chroma_collection is None:
+        return []
+    try:
+        embedding = await _get_embedding(query)
+        if not embedding:
+            return []
+
+        count = _chroma_collection.count()
+        if count == 0:
+            return []
+
+        loop = asyncio.get_event_loop()
+        results = await loop.run_in_executor(
+            None,
+            lambda: _chroma_collection.query(
+                query_embeddings=[embedding],
+                n_results=min(n_results, count),
+                include=["documents", "metadatas", "distances"],
+            )
+        )
+
+        hits = []
+        ids        = results.get("ids", [[]])[0]
+        documents  = results.get("documents", [[]])[0]
+        metadatas  = results.get("metadatas", [[]])[0]
+        distances  = results.get("distances", [[]])[0]
+
+        for ep_id, doc, meta, dist in zip(ids, documents, metadatas, distances):
+            # ChromaDB cosine → distance [0,2], similarity = 1 - dist/2
+            similarity = 1.0 - (dist / 2.0)
+            if similarity < min_similarity:
+                continue
+            hits.append({
+                "id":         ep_id,
+                "mission":    doc.split(" ")[0:10],   # extrait rapide
+                "document":   doc,
+                "similarity": round(similarity, 3),
+                "success":    meta.get("success") == "True",
+                "timestamp":  meta.get("timestamp", ""),
+                "model_used": meta.get("model_used", ""),
+                "machine_id": meta.get("machine_id", ""),
+            })
+
+        # Trier par similarité décroissante
+        hits.sort(key=lambda x: x["similarity"], reverse=True)
+        return hits
+
+    except Exception as e:
+        print(f"[Memory] Semantic search error: {e}")
+        return []
+
+
+async def _reindex_all() -> int:
+    """Ré-indexe tous les épisodes JSONL dans ChromaDB (migration ou rebuild).
+    Retourne le nombre d'épisodes indexés.
+    """
+    if not _chroma_ready:
+        return 0
+    episodes = _read_episodes_safe(EPISODE_FILE)
+    indexed = 0
+    for ep in episodes:
+        ok = await _index_episode(ep)
+        if ok:
+            indexed += 1
+    print(f"[Memory] 🔄 Ré-indexation: {indexed}/{len(episodes)} épisodes indexés dans ChromaDB")
+    return indexed
+
+
+# ─── JSONL helpers ────────────────────────────────────────────────────────
 
 class Episode(BaseModel):
-    mission: str
-    result: str
-    success: bool
+    mission:    str
+    result:     str
+    success:    bool
     duration_ms: int
     model_used: str
     skills_used: List[str] = []
-    learned: Optional[str] = None
-    # Identifiant de la machine sur laquelle la mission a été exécutée.
-    # Permet de filtrer et prioriser les souvenirs par machine.
+    learned:    Optional[str] = None
     machine_id: str = ""
 
 
 class WorldStateUpdate(BaseModel):
-    key: str
+    key:   str
     value: Any
 
 
-def atomic_write_json(filepath, data) -> None:
-    """Écriture atomique JSON via fichier temp + rename (évite corruption).
+class SemanticSearchRequest(BaseModel):
+    query:          str
+    n_results:      int = 5
+    min_similarity: float = 0.3
 
-    Utilise tempfile.mkstemp dans le même répertoire que la cible pour garantir
-    que le rename est atomique (même device/filesystem). En cas d'erreur, le
-    fichier temporaire est supprimé et l'exception est propagée.
-    """
+
+def atomic_write_json(filepath, data) -> None:
+    """Écriture atomique JSON via fichier temp + rename."""
     path = Path(filepath)
-    dir_path = str(path.parent.resolve())
-    fd, tmp_path = tempfile.mkstemp(dir=dir_path, suffix='.tmp')
+    fd, tmp_path = tempfile.mkstemp(dir=str(path.parent.resolve()), suffix=".tmp")
     try:
-        with os.fdopen(fd, 'w', encoding='utf-8') as f:
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
             json.dump(data, f, ensure_ascii=False, indent=2)
-        os.replace(tmp_path, str(path))  # atomique sur POSIX
+        os.replace(tmp_path, str(path))
     except Exception:
         try:
             os.unlink(tmp_path)
@@ -82,12 +269,7 @@ def atomic_write_json(filepath, data) -> None:
 
 
 def _read_episodes_safe(filepath: Path) -> list:
-    """Lit episodes.jsonl en sautant les lignes corrompues.
-    CORRECTION 2 : incrémente _corruption_count et loggue une alerte si >10.
-    NOTE : cette fonction doit être appelée depuis un contexte déjà protégé
-    par _FILE_LOCK (voir GET /episodes) ou depuis un contexte où la concurrence
-    n'est pas un risque (health, profile, search — lecture seule légère).
-    """
+    """Lit episodes.jsonl en sautant les lignes corrompues."""
     global _corruption_count
     episodes = []
     if not filepath.exists():
@@ -101,74 +283,79 @@ def _read_episodes_safe(filepath: Path) -> list:
         except json.JSONDecodeError as e:
             _corruption_count += 1
             print(f"[Memory] Ligne corrompue ignorée: {e} — {line[:80]}")
-            # CORRECTION 2 — Alerte visible si trop de corruptions
             if _corruption_count > 10:
-                print(
-                    f"[Memory] ⚠️ ALERTE: {_corruption_count} lignes corrompues "
-                    f"détectées dans {filepath.name}"
-                )
-                _corruption_count = 0  # Réinitialisation après l'alerte
+                print(f"[Memory] ⚠️ ALERTE: {_corruption_count} lignes corrompues dans {filepath.name}")
+                _corruption_count = 0
     return episodes
 
 
 async def _trim_unlocked(filepath: Path, max_ep: int) -> None:
-    """Version interne du trim — doit être appelée depuis un contexte
-    déjà protégé par _FILE_LOCK (pas de re-lock pour éviter le deadlock).
-    CORRECTION 3 : écriture atomique via fichier temporaire + os.replace.
-    """
+    """Trim JSONL — doit être appelé sous _FILE_LOCK."""
     try:
         if not filepath.exists():
             return
         lines = [l for l in filepath.read_text(encoding="utf-8").splitlines() if l.strip()]
         if len(lines) <= max_ep:
             return
-        to_archive = lines[:-max_ep]   # les plus anciens, qui seront supprimés
+        to_archive = lines[:-max_ep]
         kept = lines[-max_ep:]
-
-        # Archivage des épisodes supprimés — append dans episodes_archive.jsonl
         archive_path = filepath.parent / "episodes_archive.jsonl"
         try:
             with open(archive_path, "a", encoding="utf-8") as af:
                 for line in to_archive:
                     af.write(line + "\n")
-            print(f"[Memory] 📦 Archivage: {len(to_archive)} épisodes → {archive_path.name}")
+            print(f"[Memory] 📦 Archivage: {len(to_archive)} épisodes")
         except Exception as arch_err:
-            print(f"[Memory] ⚠️  Archive error (non-bloquant): {arch_err}")
-
-        # CORRECTION 3 — Écriture atomique : .tmp puis os.replace
+            print(f"[Memory] ⚠️  Archive error: {arch_err}")
         tmp_path = filepath.with_suffix(".tmp")
         tmp_path.write_text("\n".join(kept) + "\n", encoding="utf-8")
         os.replace(tmp_path, filepath)
-
-        print(f"[Memory] 🗑️  Trim épisodes: {len(lines)} → {len(kept)} (archivés: {len(to_archive)})")
+        print(f"[Memory] 🗑️  Trim: {len(lines)} → {len(kept)}")
     except Exception as e:
         print(f"[Memory] ⚠️  Trim error: {e}")
 
 
+# ─── Startup ───────────────────────────────────────────────────────────────
+
+@app.on_event("startup")
+async def startup():
+    """Init ChromaDB au démarrage + ré-indexation si collection vide."""
+    loop = asyncio.get_event_loop()
+    chroma_ok = await loop.run_in_executor(None, _init_chroma)
+
+    if chroma_ok and _chroma_collection is not None:
+        count = await loop.run_in_executor(None, _chroma_collection.count)
+        if count == 0:
+            episodes = _read_episodes_safe(EPISODE_FILE)
+            if episodes:
+                print(f"[Memory] 🔄 Collection vide — ré-indexation de {len(episodes)} épisodes existants...")
+                asyncio.create_task(_reindex_all())
+            else:
+                print("[Memory] ℹ️  Collection vide, aucun épisode à indexer pour l'instant.")
+
+
+# ─── Endpoints ────────────────────────────────────────────────────────────
+
 @app.post("/episode")
 async def save_episode(episode: Episode):
-    # CORRECTION 1 — Toute l'opération write + trim est protégée par le lock.
     async with _FILE_LOCK:
-        entry = {
-            "timestamp": datetime.utcnow().isoformat(),
-            **episode.model_dump()
-        }
+        entry = {"timestamp": datetime.utcnow().isoformat(), **episode.model_dump()}
         with open(EPISODE_FILE, "a", encoding="utf-8") as f:
             f.write(json.dumps(entry, ensure_ascii=False) + "\n")
-        # Trim appelé directement (pas via create_task) — déjà sous lock,
-        # on utilise _trim_unlocked pour éviter le deadlock.
         await _trim_unlocked(EPISODE_FILE, MAX_EPISODES)
         if episode.learned:
             with open(PERSISTENT_FILE, "a", encoding="utf-8") as f:
                 f.write(f"\n### {datetime.utcnow().strftime('%Y-%m-%d %H:%M')} — Apprentissage\n{episode.learned}\n")
         episodes = _read_episodes_safe(EPISODE_FILE)
-    return {"saved": True, "total_episodes": len(episodes)}
+
+    # Indexation ChromaDB en arrière-plan (non-bloquant)
+    asyncio.create_task(_index_episode(entry))
+
+    return {"saved": True, "total_episodes": len(episodes), "indexed_in_chroma": _chroma_ready}
 
 
 @app.get("/episodes")
 async def get_episodes(limit: int = 20):
-    # CORRECTION 4 — Lecture protégée par le lock pour éviter une lecture
-    # pendant un trim en cours.
     async with _FILE_LOCK:
         episodes = _read_episodes_safe(EPISODE_FILE)
     return {"episodes": list(reversed(episodes[-limit:]))}
@@ -176,22 +363,104 @@ async def get_episodes(limit: int = 20):
 
 @app.post("/search")
 async def search_episodes(query: dict):
-    keywords  = query.get("keywords", [])
-    machine   = query.get("machine_id", "")  # filtre optionnel par machine
-    results   = []
+    """Recherche hybride : sémantique ChromaDB si disponible, sinon mots-clés."""
+    keywords = query.get("keywords", [])
+    machine  = query.get("machine_id", "")
+    text_q   = " ".join(keywords)
+
+    # ── Recherche sémantique ChromaDB ─────────────────────────────────────
+    if _chroma_ready and text_q:
+        hits = await semantic_search(text_q, n_results=10)
+        if hits:
+            # Récupère les épisodes JSONL complets pour les hits sémantiques
+            all_eps   = _read_episodes_safe(EPISODE_FILE)
+            hits_docs = {h["document"] for h in hits}
+            # Retrouve les épisodes JSONL correspondants par texte similaire
+            results = []
+            for ep in all_eps:
+                if machine and ep.get("machine_id", "") not in ("", machine):
+                    continue
+                ep_text = _episode_to_text(ep)
+                # Match si le texte de l'épisode correspond à un hit ChromaDB
+                if any(ep_text[:100] in doc or doc[:100] in ep_text for doc in hits_docs):
+                    results.append(ep)
+            if results:
+                return {"results": results[-10:], "method": "semantic", "hits": len(hits)}
+
+    # ── Fallback : recherche par mots-clés ────────────────────────────────
+    results = []
     for ep in _read_episodes_safe(EPISODE_FILE):
-        # Filtre machine_id si fourni
         if machine and ep.get("machine_id", "") not in ("", machine):
             continue
-        text = (ep.get("mission", "") + ep.get("result", "") + ep.get("learned", "")).lower()
-        if not keywords or any(k.lower() in text for k in keywords):
+        ep_text = (ep.get("mission", "") + ep.get("result", "") + (ep.get("learned") or "")).lower()
+        if not keywords or any(k.lower() in ep_text for k in keywords):
             results.append(ep)
-    return {"results": results[-10:]}
+    return {"results": results[-10:], "method": "keywords"}
+
+
+@app.post("/semantic_search")
+async def semantic_search_endpoint(req: SemanticSearchRequest):
+    """Recherche sémantique pure par similarité cosine (ChromaDB + nomic-embed-text).
+
+    Retourne les épisodes les plus similaires à la requête, triés par score.
+    """
+    if not _chroma_ready:
+        return {
+            "results": [],
+            "error":   "ChromaDB non disponible — utilise /search (mots-clés)",
+            "chroma_ready": False,
+        }
+
+    hits = await semantic_search(req.query, req.n_results, req.min_similarity)
+
+    # Enrichir avec le contenu JSONL complet
+    if hits:
+        all_eps = _read_episodes_safe(EPISODE_FILE)
+        enriched = []
+        for hit in hits:
+            # Trouver l'épisode JSONL correspondant
+            matching = next(
+                (ep for ep in all_eps if _episode_to_text(ep)[:100] in hit["document"]
+                 or hit["document"][:100] in _episode_to_text(ep)),
+                None
+            )
+            enriched.append({
+                **hit,
+                "episode": matching,
+            })
+        return {
+            "results":     enriched,
+            "query":       req.query,
+            "total_found": len(enriched),
+            "chroma_ready": True,
+            "embed_model": EMBED_MODEL,
+        }
+
+    return {
+        "results":     [],
+        "query":       req.query,
+        "total_found": 0,
+        "chroma_ready": True,
+        "embed_model": EMBED_MODEL,
+    }
+
+
+@app.post("/reindex")
+async def reindex():
+    """Force une ré-indexation complète des épisodes JSONL dans ChromaDB."""
+    if not _chroma_ready:
+        return {"error": "ChromaDB non disponible"}
+    asyncio.create_task(_reindex_all())
+    episodes_count = len(_read_episodes_safe(EPISODE_FILE))
+    return {
+        "started": True,
+        "episodes_to_index": episodes_count,
+        "message": "Ré-indexation lancée en arrière-plan",
+    }
 
 
 @app.get("/episodes/by_machine/{machine_id}")
 async def get_episodes_by_machine(machine_id: str, limit: int = 20):
-    """Retourne les épisodes filtrés par machine_id (récents en premier)."""
     async with _FILE_LOCK:
         all_eps = _read_episodes_safe(EPISODE_FILE)
     filtered = [ep for ep in all_eps if ep.get("machine_id", "") in ("", machine_id)]
@@ -216,22 +485,44 @@ async def update_world_state(update: WorldStateUpdate):
 async def get_profile():
     profile = PERSISTENT_FILE.read_text(encoding="utf-8") if PERSISTENT_FILE.exists() else "Aucun profil."
     episodes_count = len(_read_episodes_safe(EPISODE_FILE))
-    return {"profile": profile, "total_episodes": episodes_count}
+    chroma_count = 0
+    if _chroma_ready and _chroma_collection:
+        try:
+            loop = asyncio.get_event_loop()
+            chroma_count = await loop.run_in_executor(None, _chroma_collection.count)
+        except Exception:
+            pass
+    return {
+        "profile":         profile,
+        "total_episodes":  episodes_count,
+        "chroma_indexed":  chroma_count,
+        "chroma_ready":    _chroma_ready,
+    }
 
 
 @app.get("/health")
 async def health():
     episode_count = 0
+    chroma_count  = 0
     try:
         episode_count = len(_read_episodes_safe(EPISODE_FILE))
     except Exception:
         pass
+    if _chroma_ready and _chroma_collection:
+        try:
+            loop = asyncio.get_event_loop()
+            chroma_count = await loop.run_in_executor(None, _chroma_collection.count)
+        except Exception:
+            pass
     return {
-        "status": "ok",
-        "layer": "memory",
-        "episode_count": episode_count,
-        "max_episodes": MAX_EPISODES,
-        "episode_file": str(EPISODE_FILE),
+        "status":          "ok",
+        "layer":           "memory",
+        "episode_count":   episode_count,
+        "max_episodes":    MAX_EPISODES,
+        "chroma_ready":    _chroma_ready,
+        "chroma_indexed":  chroma_count,
+        "embed_model":     EMBED_MODEL,
+        "episode_file":    str(EPISODE_FILE),
         "world_state_file": str(WORLD_STATE_FILE),
     }
 
