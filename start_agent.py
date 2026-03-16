@@ -31,6 +31,26 @@ except ImportError:
 # ---------------------------------------------------------------------------
 
 ROOT = Path(__file__).resolve().parent
+
+# Auto-détection hardware au premier lancement
+_ENV_FILE = ROOT / ".env"
+if not _ENV_FILE.exists():
+    try:
+        from scripts.detect_hardware import recommend_tier, get_system_info, build_env_vars, apply_to_env
+        _hw_info = get_system_info()
+        _tier = recommend_tier(_hw_info)
+        print(f"🔧 Hardware détecté — tier recommandé : {_tier.upper()}")
+        apply_to_env(build_env_vars(_tier))
+    except Exception:
+        pass  # detect_hardware est optionnel — ne jamais bloquer le démarrage
+
+# Preflight Computer Use — zero-config, auto-adapte à la machine
+try:
+    from scripts.preflight_cu import run_preflight
+    _cu_profile = run_preflight()
+except Exception as _preflight_err:
+    print(f"⚠️  Preflight CU ignoré: {_preflight_err}")
+
 PIDS_DIR = ROOT / "agent" / ".pids"
 
 # Ordre de démarrage : brain et memory AVANT queen
@@ -163,6 +183,14 @@ LAYERS = [
         "desc": "Self-Optimization Engine — Miner→Evolution→Validator",
         "emoji": "⚡",
         "depends_on": ["Miner", "Evolution", "Validator"],
+    },
+    {
+        "name": "Reflexion",
+        "file": "agent.reflexion",
+        "port": 8018,
+        "desc": "Reflexion Engine — méta-apprentissage depuis épisodes échoués",
+        "emoji": "🪞",
+        "depends_on": ["Brain", "Memory"],
     },
     {
         "name": "Queen",
