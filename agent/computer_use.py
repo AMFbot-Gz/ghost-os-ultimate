@@ -349,6 +349,8 @@ Règles :
 - Clique PRÉCISÉMENT sur les bons éléments (utilise les coordonnées exactes du screenshot)
 - Sur macOS : cmd+c=copier, cmd+v=coller, cmd+q=quitter, cmd+w=fermer, cmd+tab=switch app
 - Retourne UNIQUEMENT du JSON valide, rien d'autre
+- Dès que le but est atteint (commande exécutée, fichier créé, action effectuée), retourne immédiatement action=done
+- N'effectue PAS de vérifications supplémentaires après avoir exécuté l'action demandée — fais confiance à tes actions
 """
 
 def _parse_vision_action(raw: str) -> dict:
@@ -451,7 +453,11 @@ async def _run_anthropic_cu_session(session_id: str):
                         f"But : {goal}\n"
                         f"Étape {step_num}/{max_steps}. "
                         f"Écran actuel ci-dessus ({W}×{H} px). "
-                        "Quelle action effectuer ? Réponds en JSON uniquement."
+                        + (
+                            "⚠️ DERNIÈRES ÉTAPES — si le but est déjà atteint, retourne action=done MAINTENANT. "
+                            if step_num >= max_steps - 2 else ""
+                        )
+                        + "Quelle action effectuer ? Réponds en JSON uniquement."
                     ),
                 },
             ]
