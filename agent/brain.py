@@ -2784,6 +2784,56 @@ async def miner_health():
     return await _proxy_miner("GET", "/health")
 
 
+# ─── Swarm Router proxy (:8013) ───────────────────────────────────────────────
+
+_SWARM_URL = "http://localhost:8013"
+
+
+async def _proxy_swarm(method: str, path: str, body: dict | None = None, params: dict | None = None):
+    try:
+        async with httpx.AsyncClient(timeout=180) as c:
+            if method == "GET":
+                r = await c.get(f"{_SWARM_URL}{path}", params=params)
+            elif method == "POST":
+                r = await c.post(f"{_SWARM_URL}{path}", json=body or {}, params=params)
+            else:
+                r = await c.request(method, f"{_SWARM_URL}{path}", json=body, params=params)
+            r.raise_for_status()
+            return r.json()
+    except Exception as e:
+        return {"error": str(e), "layer": "swarm_router", "path": path}
+
+
+@app.post("/swarm/dispatch")
+async def swarm_dispatch(req: dict):
+    return await _proxy_swarm("POST", "/dispatch", req)
+
+
+@app.get("/swarm/classify")
+async def swarm_classify(mission: str = Query(...)):
+    return await _proxy_swarm("GET", "/classify", params={"mission": mission})
+
+
+@app.get("/swarm/bees")
+async def swarm_bees():
+    return await _proxy_swarm("GET", "/bees")
+
+
+@app.get("/swarm/log")
+async def swarm_log(limit: int = Query(50)):
+    return await _proxy_swarm("GET", "/log", params={"limit": limit})
+
+
+@app.get("/swarm/stats")
+async def swarm_stats():
+    return await _proxy_swarm("GET", "/stats")
+
+
+@app.get("/swarm/health")
+async def swarm_health():
+    return await _proxy_swarm("GET", "/health")
+
+
 @app.post("/raw")
 async def raw_llm(req: dict):
     result = await llm(

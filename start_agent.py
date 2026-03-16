@@ -125,6 +125,14 @@ LAYERS = [
         "depends_on": ["Brain", "Evolution", "Memory"],
     },
     {
+        "name": "SwarmRouter",
+        "file": "agent.swarm_router",
+        "port": 8013,
+        "desc": "5 abeilles spécialisées + routage domaine",
+        "emoji": "🐝",
+        "depends_on": ["Brain"],
+    },
+    {
         "name": "Queen",
         "file": "agent.queen",
         "port": 8001,

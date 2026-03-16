@@ -18,7 +18,7 @@ const NAV_ITEMS = [
   { id: "observability",icon: "🔭", label: "Observabilité" },
   { id: "agents",       icon: "🤖", label: "Agents" },
   { id: "skills",       icon: "🔧", label: "Skills" },
-  { id: "swarm",        icon: "🌐", label: "Swarm" },
+  { id: "swarm",        icon: "🐝", label: "Ruche (Swarm)",  badge: "NEW" },
   { id: "goals",        icon: "🏆", label: "Objectifs" },
   { id: "system",       icon: "📊", label: "Système" },
   { id: "logs",         icon: "📜", label: "Logs" },

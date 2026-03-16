@@ -16,7 +16,7 @@ Ghost OS Ultimate v1.0.0
 │   ├── Market (réputation agents)
 │   └── WebSocket HUD :9001
 │
-├── agent/                               ← 12 couches Python FastAPI
+├── agent/                               ← 13 couches Python FastAPI
 │   ├── queen.py          :8001  Orchestrateur + HITL + Telegram (Phase 12)
 │   ├── perception.py     :8002  Screenshots + scan système
 │   ├── brain.py          :8003  LLM routing (Claude → Kimi → Ollama)
@@ -28,7 +28,8 @@ Ghost OS Ultimate v1.0.0
 │   ├── learner.py        :8009  Skill learning épisodes (Phase 11)
 │   ├── goals.py          :8010  Autonomous Goal Loop SQLite (Phase 13)
 │   ├── pipeline.py       :8011  Skill Pipeline Composer (Phase 14)
-│   └── miner.py          :8012  Behavior Mining Engine (Phase 15)
+│   ├── miner.py          :8012  Behavior Mining Engine (Phase 15)
+│   └── swarm_router.py   :8013  Bee Specialization — 5 abeilles (Phase 16)
 │
 ├── core/
 │   ├── consciousness/            ← NOUVEAU — conscience universelle
@@ -191,6 +192,7 @@ mkdir skills/mon_skill
 ## Stack
 - **Node.js** 20+ (ESM), Hono + WebSocket, Telegraf, PM2
 - **Python** 3.11+, FastAPI, pyautogui, httpx, SQLite
+- **Bee Specialization** :8013 — UIAgent · FileAgent · CodeAgent · WebAgent · SystemAgent · routage keyword scoring · Brain mission_type → domain-contexts/
 - **LLM** Ollama local (llama3, moondream) + Claude API fallback
 - **Frontend** React 18 + Vite + Tailwind (dashboard), Electron (HUD)
 - **Tests** Jest 29 (ESM) + Pytest

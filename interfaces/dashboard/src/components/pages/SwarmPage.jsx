@@ -1,232 +1,493 @@
 /**
- * SwarmPage.jsx — Vue complète du swarm distribué LaRuche
- * Affiche les nœuds Ollama, leur statut, modèles, latence et charge.
+ * SwarmPage.jsx — Phase 16 : Bee Specialization
+ * 5 abeilles spécialisées + routage automatique + log des décisions + dispatch manuel
  */
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from "react";
 
-const STATUS_COLOR = {
-  up:      { bg: 'var(--green-dim,rgba(166,227,161,0.12))', text: 'var(--ctp-green,#a6e3a1)',  label: 'En ligne' },
-  down:    { bg: 'var(--red-dim,rgba(243,139,168,0.12))',   text: 'var(--ctp-red,#f38ba8)',    label: 'Hors ligne' },
-  unknown: { bg: 'var(--yellow-dim,rgba(249,226,175,0.12))',text: 'var(--ctp-yellow,#f9e2af)', label: 'Inconnu' },
-};
+const SWARM_API = "http://localhost:8013";
+const BRAIN_API = "http://localhost:8003";
 
-// Couches Python internes toujours présentes dans LaRuche
+// Couches Python complètes (13 couches)
 const PYTHON_LAYERS = [
-  { id: 'queen-py',    port: 8001, role: 'Orchestrateur',   emoji: '👑' },
-  { id: 'perception',  port: 8002, role: 'Perception',      emoji: '👁️' },
-  { id: 'brain',       port: 8003, role: 'Brain / LLM',     emoji: '🧠' },
-  { id: 'executor',    port: 8004, role: 'Exécuteur Shell',  emoji: '⚙️' },
-  { id: 'evolution',   port: 8005, role: 'Évolution Skills', emoji: '🧬' },
-  { id: 'memory',      port: 8006, role: 'Mémoire',         emoji: '💾' },
-  { id: 'mcp-bridge',  port: 8007, role: 'MCP Bridge',      emoji: '🌉' },
+  { id: "queen-py",     port: 8001, role: "Queen Orchestrateur",  emoji: "👑" },
+  { id: "brain",        port: 8003, role: "Brain / LLM Router",   emoji: "🧠" },
+  { id: "perception",   port: 8002, role: "Perception",           emoji: "👁️" },
+  { id: "executor",     port: 8004, role: "Exécuteur Shell",      emoji: "⚙️" },
+  { id: "evolution",    port: 8005, role: "Évolution Skills",     emoji: "🧬" },
+  { id: "memory",       port: 8006, role: "Mémoire",              emoji: "💾" },
+  { id: "mcp-bridge",   port: 8007, role: "MCP Bridge",           emoji: "🌉" },
+  { id: "planner",      port: 8008, role: "Planner HTN",          emoji: "🗺️" },
+  { id: "learner",      port: 8009, role: "Apprentissage",        emoji: "🎓" },
+  { id: "goals",        port: 8010, role: "Objectifs Autonomes",  emoji: "🏆" },
+  { id: "pipeline",     port: 8011, role: "Pipeline Composer",    emoji: "🔗" },
+  { id: "miner",        port: 8012, role: "Behavior Mining",      emoji: "⛏" },
+  { id: "swarm-router", port: 8013, role: "Swarm Router (Ruche)", emoji: "🐝" },
 ];
 
-function StatCard({ label, value, color = 'var(--text)', sub }) {
+const DOMAIN_COLORS = {
+  ui:     { bg: "rgba(203,166,247,0.15)", text: "#cba6f7" },
+  file:   { bg: "rgba(249,226,175,0.15)", text: "#f9e2af" },
+  code:   { bg: "rgba(137,220,235,0.15)", text: "#89dceb" },
+  web:    { bg: "rgba(166,227,161,0.15)", text: "#a6e3a1" },
+  system: { bg: "rgba(243,139,168,0.15)", text: "#f38ba8" },
+};
+
+function ConfBar({ value, domain }) {
+  const c = DOMAIN_COLORS[domain] || { bg: "rgba(150,150,150,0.15)", text: "#cdd6f4" };
+  const pct = Math.round((value || 0) * 100);
   return (
-    <div style={{
-      background: 'var(--surface-2)', borderRadius: 10, padding: '16px 20px',
-      display: 'flex', flexDirection: 'column', gap: 4,
-    }}>
-      <div style={{ fontSize: 26, fontWeight: 700, color }}>{value ?? '—'}</div>
-      <div style={{ fontSize: 12, color: 'var(--text-3)', fontWeight: 500 }}>{label}</div>
-      {sub && <div style={{ fontSize: 11, color: 'var(--text-3)', marginTop: 2 }}>{sub}</div>}
+    <div style={{ height: 5, borderRadius: 3, background: "var(--surface)", overflow: "hidden", marginTop: 3 }}>
+      <div style={{
+        height: "100%", borderRadius: 3,
+        width: `${pct}%`, background: c.text, transition: "width 0.4s ease",
+      }} />
     </div>
   );
 }
 
-function NodeCard({ node }) {
-  const s = STATUS_COLOR[node.status] || STATUS_COLOR.unknown;
-  const load = node.maxConcurrency > 0
-    ? Math.round((node.activeJobs / node.maxConcurrency) * 100)
-    : 0;
+function DomainBadge({ domain }) {
+  const c = DOMAIN_COLORS[domain] || { bg: "rgba(150,150,150,0.12)", text: "#cdd6f4" };
+  return (
+    <span style={{
+      fontSize: 10, fontWeight: 700, padding: "2px 8px", borderRadius: 10,
+      background: c.bg, color: c.text, letterSpacing: "0.05em",
+      textTransform: "uppercase",
+    }}>{domain}</span>
+  );
+}
+
+function BeeCard({ bee, stats }) {
+  const s = stats || {};
+  const total   = s.routed_count || 0;
+  const succRate = s.success_rate || 0;
+  const avgMs   = s.avg_ms || 0;
+  const c = DOMAIN_COLORS[bee.domain] || { bg: "rgba(150,150,150,0.12)", text: "#cdd6f4" };
 
   return (
     <div style={{
-      background: 'var(--surface-2)', borderRadius: 10, padding: '16px',
-      display: 'flex', flexDirection: 'column', gap: 10,
-      border: `1px solid ${node.status === 'up' ? 'var(--border)' : 'rgba(243,139,168,0.3)'}`,
+      background: "var(--surface-2)", borderRadius: 12, padding: "16px 18px",
+      border: `1px solid ${c.text}33`, display: "flex", flexDirection: "column", gap: 10,
     }}>
-      {/* En-tête */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+      {/* Header */}
+      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+        <span style={{ fontSize: 26 }}>{bee.emoji}</span>
+        <div style={{ flex: 1 }}>
+          <div style={{ fontSize: 14, fontWeight: 700, color: "var(--text)" }}>{bee.name}</div>
+          <div style={{ fontSize: 11, color: "var(--text-3)", marginTop: 1 }}>{bee.desc}</div>
+        </div>
+        <DomainBadge domain={bee.domain} />
+      </div>
+
+      {/* Métriques */}
+      <div style={{ display: "flex", gap: 10 }}>
+        <div style={{ flex: 1, textAlign: "center", background: "var(--surface)", borderRadius: 8, padding: "8px 4px" }}>
+          <div style={{ fontSize: 20, fontWeight: 700, color: "var(--text)" }}>{total}</div>
+          <div style={{ fontSize: 10, color: "var(--text-3)" }}>routées</div>
+        </div>
+        <div style={{ flex: 1, textAlign: "center", background: "var(--surface)", borderRadius: 8, padding: "8px 4px" }}>
+          <div style={{ fontSize: 20, fontWeight: 700, color: succRate >= 0.7 ? "var(--green)" : succRate >= 0.4 ? "var(--primary)" : "var(--red)" }}>
+            {total > 0 ? `${Math.round(succRate * 100)}%` : "—"}
+          </div>
+          <div style={{ fontSize: 10, color: "var(--text-3)" }}>succès</div>
+        </div>
+        <div style={{ flex: 1, textAlign: "center", background: "var(--surface)", borderRadius: 8, padding: "8px 4px" }}>
+          <div style={{ fontSize: 20, fontWeight: 700, color: "var(--text)" }}>
+            {total > 0 ? `${avgMs < 1000 ? avgMs : (avgMs / 1000).toFixed(1) + "k"}` : "—"}
+          </div>
+          <div style={{ fontSize: 10, color: "var(--text-3)" }}>ms moy</div>
+        </div>
+      </div>
+
+      {/* Taux succès barre */}
+      {total > 0 && (
         <div>
-          <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text)' }}>{node.id}</div>
-          <div style={{ fontSize: 11, color: 'var(--text-3)', marginTop: 2 }}>{node.url}</div>
+          <div style={{ fontSize: 10, color: "var(--text-3)", marginBottom: 3 }}>Taux de succès</div>
+          <div style={{ height: 5, borderRadius: 3, background: "var(--surface)", overflow: "hidden" }}>
+            <div style={{
+              height: "100%", width: `${Math.round(succRate * 100)}%`,
+              background: succRate >= 0.7 ? "var(--green)" : succRate >= 0.4 ? "var(--primary)" : "var(--red)",
+              borderRadius: 3, transition: "width 0.4s ease",
+            }} />
+          </div>
         </div>
-        <span style={{
-          fontSize: 11, fontWeight: 600, padding: '3px 10px', borderRadius: 20,
-          background: s.bg, color: s.text,
-        }}>{s.label}</span>
-      </div>
+      )}
 
-      {/* Rôle + modèles */}
-      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
-        <span style={{
-          fontSize: 11, padding: '2px 8px', borderRadius: 4,
-          background: 'var(--primary-dim,rgba(224,123,84,0.12))', color: 'var(--primary)',
-          fontWeight: 500,
-        }}>{node.role || 'worker'}</span>
-        {(node.models || []).map(m => (
-          <span key={m} style={{
-            fontSize: 10, padding: '2px 6px', borderRadius: 4,
-            background: 'var(--surface)', color: 'var(--text-2)',
-          }}>{m}</span>
-        ))}
-      </div>
-
-      {/* Charge */}
-      <div>
-        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
-          <span style={{ fontSize: 11, color: 'var(--text-3)' }}>Charge</span>
-          <span style={{ fontSize: 11, color: 'var(--text-2)', fontWeight: 500 }}>
-            {node.activeJobs}/{node.maxConcurrency} jobs ({load}%)
-          </span>
-        </div>
-        <div style={{ height: 4, borderRadius: 2, background: 'var(--surface)', overflow: 'hidden' }}>
-          <div style={{
-            height: '100%', borderRadius: 2,
-            width: `${load}%`,
-            background: load > 80 ? 'var(--ctp-red,#f38ba8)' : load > 50 ? 'var(--ctp-yellow,#f9e2af)' : 'var(--ctp-green,#a6e3a1)',
-            transition: 'width 0.4s ease',
-          }} />
-        </div>
-      </div>
-
-      {/* Latence */}
-      {node.latencyMs != null && (
-        <div style={{ fontSize: 11, color: 'var(--text-3)' }}>
-          Latence: <span style={{ color: node.latencyMs < 200 ? 'var(--ctp-green,#a6e3a1)' : 'var(--ctp-yellow,#f9e2af)', fontWeight: 600 }}>
-            {node.latencyMs}ms
-          </span>
+      {s.last_used_at && (
+        <div style={{ fontSize: 10, color: "var(--text-3)" }}>
+          Dernière utilisation : {new Date(s.last_used_at + "Z").toLocaleTimeString("fr-FR")}
         </div>
       )}
     </div>
   );
 }
 
-function LayerRow({ layer, health }) {
-  const ok = health?.[layer.port];
+function LogRow({ item }) {
+  const c = DOMAIN_COLORS[item.domain] || { text: "#cdd6f4" };
+  const ok = item.success === 1;
   return (
     <div style={{
-      display: 'flex', alignItems: 'center', gap: 12,
-      padding: '10px 14px', borderRadius: 8,
-      background: 'var(--surface-2)',
+      display: "flex", alignItems: "flex-start", gap: 10,
+      padding: "10px 12px", borderRadius: 8, background: "var(--surface-2)",
+      marginBottom: 4,
     }}>
-      <span style={{ fontSize: 18, width: 24, textAlign: 'center' }}>{layer.emoji}</span>
-      <div style={{ flex: 1 }}>
-        <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--text)' }}>{layer.role}</div>
-        <div style={{ fontSize: 11, color: 'var(--text-3)' }}>:{layer.port}</div>
+      <span style={{ fontSize: 13, minWidth: 18 }}>{ok ? "✅" : "❌"}</span>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ fontSize: 12, color: "var(--text)", lineHeight: 1.4 }}
+             title={item.mission}>{item.mission?.substring(0, 90)}{item.mission?.length > 90 ? "…" : ""}</div>
+        {item.result_preview && (
+          <div style={{ fontSize: 11, color: "var(--text-3)", marginTop: 3 }}>
+            → {item.result_preview?.substring(0, 80)}{item.result_preview?.length > 80 ? "…" : ""}
+          </div>
+        )}
+        {item.error && <div style={{ fontSize: 11, color: "var(--red)", marginTop: 3 }}>{item.error?.substring(0, 80)}</div>}
       </div>
-      <span style={{
-        fontSize: 11, fontWeight: 600, padding: '3px 10px', borderRadius: 20,
-        background: ok ? 'var(--green-dim,rgba(166,227,161,0.12))' : 'var(--red-dim,rgba(243,139,168,0.12))',
-        color: ok ? 'var(--ctp-green,#a6e3a1)' : 'var(--ctp-red,#f38ba8)',
-      }}>{ok ? 'OK' : 'Down'}</span>
+      <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 4, flexShrink: 0 }}>
+        <DomainBadge domain={item.domain} />
+        <span style={{ fontSize: 10, color: "var(--text-3)" }}>
+          {item.duration_ms ? `${item.duration_ms < 1000 ? item.duration_ms + "ms" : (item.duration_ms / 1000).toFixed(1) + "s"}` : ""}
+        </span>
+        <span style={{ fontSize: 10, color: "var(--text-3)" }}>
+          {item.created_at ? new Date(item.created_at + "Z").toLocaleTimeString("fr-FR") : ""}
+        </span>
+      </div>
+    </div>
+  );
+}
+
+function LayerStatus({ layer, healthy }) {
+  const ok = healthy;
+  return (
+    <div style={{
+      display: "flex", alignItems: "center", gap: 10,
+      padding: "8px 12px", borderRadius: 8, background: "var(--surface-2)",
+    }}>
+      <span style={{ fontSize: 16, width: 22, textAlign: "center" }}>{layer.emoji}</span>
+      <div style={{ flex: 1 }}>
+        <div style={{ fontSize: 12, fontWeight: 500, color: "var(--text)" }}>{layer.role}</div>
+        <div style={{ fontSize: 10, color: "var(--text-3)" }}>:{layer.port}</div>
+      </div>
+      <div style={{
+        width: 8, height: 8, borderRadius: "50%",
+        background: ok ? "var(--green)" : "var(--red)",
+        boxShadow: ok ? "0 0 6px var(--green)" : "none",
+        flexShrink: 0,
+      }} />
     </div>
   );
 }
 
 export default function SwarmPage() {
-  const [stats, setStats]   = useState(null);
-  const [nodes, setNodes]   = useState([]);
-  const [health, setHealth] = useState({});
+  const [tab, setTab]           = useState("bees");
+  const [bees, setBees]         = useState([]);
+  const [globalStats, setGlobalStats] = useState(null);
+  const [log, setLog]           = useState([]);
+  const [layerHealth, setLayerHealth] = useState({});
+  const [dispatch, setDispatch] = useState({ mission: "", domain: "", dry_run: false });
+  const [dispatchResult, setDispatchResult] = useState(null);
+  const [dispatchLoading, setDispatchLoading] = useState(false);
+  const [classifyResult, setClassifyResult]   = useState(null);
+  const [classifyLoading, setClassifyLoading] = useState(false);
   const [lastUpdate, setLastUpdate] = useState(null);
 
   const fetchData = async () => {
-    // Swarm Ollama nodes
     try {
-      const [s, n] = await Promise.all([
-        fetch('/api/swarm/stats').then(r => r.json()),
-        fetch('/api/swarm/nodes').then(r => r.json()),
+      const [beesR, statsR, logR] = await Promise.all([
+        fetch(`${SWARM_API}/bees`).then(r => r.ok ? r.json() : null),
+        fetch(`${SWARM_API}/stats`).then(r => r.ok ? r.json() : null),
+        fetch(`${SWARM_API}/log?limit=40`).then(r => r.ok ? r.json() : null),
       ]);
-      setStats(s);
-      setNodes(n.nodes || []);
-    } catch { /* silencieux */ }
+      if (beesR?.bees) setBees(beesR.bees);
+      if (statsR)       setGlobalStats(statsR);
+      if (logR?.items)  setLog(logR.items);
+      setLastUpdate(new Date().toLocaleTimeString("fr-FR"));
+    } catch {}
 
-    // Santé couches Python
-    const results = {};
-    await Promise.all(
-      PYTHON_LAYERS.map(async (l) => {
-        try {
-          const r = await fetch(`http://localhost:${l.port}/health`);
-          results[l.port] = r.ok;
-        } catch { results[l.port] = false; }
-      })
-    );
-    setHealth(results);
-    setLastUpdate(new Date().toLocaleTimeString('fr-FR'));
+    // Health check des 13 couches
+    const health = {};
+    await Promise.all(PYTHON_LAYERS.map(async l => {
+      try {
+        const r = await fetch(`http://localhost:${l.port}/health`, { signal: AbortSignal.timeout(2500) });
+        health[l.port] = r.ok;
+      } catch { health[l.port] = false; }
+    }));
+    setLayerHealth(health);
   };
 
   useEffect(() => {
     fetchData();
-    const t = setInterval(fetchData, 5000);
-    return () => clearInterval(t);
+    const iv = setInterval(fetchData, 8000);
+    return () => clearInterval(iv);
   }, []);
 
-  const pythonOk = PYTHON_LAYERS.filter(l => health[l.port]).length;
+  const handleClassify = async () => {
+    if (!dispatch.mission.trim()) return;
+    setClassifyLoading(true);
+    setClassifyResult(null);
+    try {
+      const r = await fetch(`${SWARM_API}/classify?mission=${encodeURIComponent(dispatch.mission)}`);
+      if (r.ok) setClassifyResult(await r.json());
+    } catch {}
+    setClassifyLoading(false);
+  };
+
+  const handleDispatch = async () => {
+    if (!dispatch.mission.trim()) return;
+    setDispatchLoading(true);
+    setDispatchResult(null);
+    setClassifyResult(null);
+    try {
+      const body = { mission: dispatch.mission, dry_run: dispatch.dry_run };
+      if (dispatch.domain) body.domain = dispatch.domain;
+      const r = await fetch(`${SWARM_API}/dispatch`, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      if (r.ok) setDispatchResult(await r.json());
+    } catch (e) {
+      setDispatchResult({ error: e.message });
+    }
+    setDispatchLoading(false);
+    setTimeout(fetchData, 1000);
+  };
+
+  const TABS = [
+    { id: "bees",     label: "🐝 Abeilles" },
+    { id: "dispatch", label: "🚀 Dispatch" },
+    { id: "log",      label: "📋 Historique" },
+    { id: "layers",   label: "🔌 Couches" },
+  ];
+
+  const statsMap = {};
+  (globalStats?.by_domain || []).forEach(s => { statsMap[s.domain] = s; });
 
   return (
-    <div style={{ padding: '24px', maxWidth: 1100, overflowY: 'auto' }}>
-      {/* En-tête */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
+    <div style={{ padding: 24, display: "flex", flexDirection: "column", gap: 20 }}>
+      {/* Header */}
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
         <div>
-          <h2 style={{ fontSize: 20, fontWeight: 700, color: 'var(--text)', margin: 0 }}>🌐 Swarm LaRuche</h2>
-          <p style={{ fontSize: 12, color: 'var(--text-3)', margin: '4px 0 0' }}>
-            Couches Python + Nœuds Ollama distribués
-          </p>
-        </div>
-        <div style={{ fontSize: 11, color: 'var(--text-3)' }}>
-          {lastUpdate ? `Mis à jour : ${lastUpdate}` : 'Chargement...'}
-        </div>
-      </div>
-
-      {/* Stats globales */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 12, marginBottom: 28 }}>
-        <StatCard label="Couches Python" value={`${pythonOk}/7`}
-          color={pythonOk === 7 ? 'var(--ctp-green,#a6e3a1)' : 'var(--ctp-yellow,#f9e2af)'}
-          sub="actives" />
-        <StatCard label="Nœuds Ollama" value={stats?.total ?? 0} color="var(--text)" sub="configurés" />
-        <StatCard label="En ligne" value={stats?.up ?? 0} color="var(--ctp-green,#a6e3a1)" sub="nœuds UP" />
-        <StatCard label="Hors ligne" value={stats?.down ?? 0} color="var(--ctp-red,#f38ba8)" sub="nœuds DOWN" />
-        <StatCard label="Jobs actifs" value={stats?.activeJobs ?? 0} color="var(--ctp-blue,#89b4fa)"
-          sub={`/ ${stats?.totalCapacity ?? 0} cap.`} />
-      </div>
-
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24 }}>
-        {/* Couches Python internes */}
-        <div>
-          <h3 style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-2)', marginBottom: 12, marginTop: 0 }}>
-            Couches Python FastAPI
-          </h3>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-            {PYTHON_LAYERS.map(l => (
-              <LayerRow key={l.id} layer={l} health={health} />
-            ))}
+          <h2 style={{ margin: 0, fontSize: 20, fontWeight: 700, color: "var(--text)" }}>
+            🐝 Ruche Spécialisée — Phase 16
+          </h2>
+          <div style={{ fontSize: 12, color: "var(--text-3)", marginTop: 3 }}>
+            5 abeilles spécialisées · routage par domaine · Brain mission_type
+            {lastUpdate && <> · MAJ {lastUpdate}</>}
           </div>
         </div>
+        <button onClick={fetchData} style={{
+          background: "var(--surface-2)", border: "1px solid var(--border)",
+          borderRadius: 8, padding: "6px 14px", color: "var(--text-2)",
+          fontSize: 12, cursor: "pointer",
+        }}>↺ Actualiser</button>
+      </div>
 
-        {/* Nœuds Ollama distants */}
-        <div>
-          <h3 style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-2)', marginBottom: 12, marginTop: 0 }}>
-            Nœuds Ollama distribués
-          </h3>
-          {nodes.length === 0 ? (
-            <div style={{
-              background: 'var(--surface-2)', borderRadius: 10, padding: 24,
-              textAlign: 'center', color: 'var(--text-3)', fontSize: 13,
-            }}>
-              <div style={{ fontSize: 28, marginBottom: 8 }}>🔌</div>
-              Aucun nœud Ollama configuré.
-              <div style={{ fontSize: 11, marginTop: 6 }}>
-                Éditez <code>config/swarm_nodes.yml</code> pour ajouter des nœuds.
+      {/* KPIs globaux */}
+      {globalStats && (
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 12 }}>
+          {[
+            { label: "Missions routées",   value: globalStats.total_routed,  color: "var(--primary)" },
+            { label: "Succès total",        value: globalStats.total_success, color: "var(--green)" },
+            { label: "Taux succès global",  value: `${Math.round((globalStats.global_success_rate || 0) * 100)}%`, color: "var(--violet)" },
+            { label: "Abeilles actives",    value: globalStats.bees_count,    color: "var(--primary)" },
+          ].map(k => (
+            <div key={k.label} style={{ background: "var(--surface-2)", borderRadius: 10, padding: "14px 16px" }}>
+              <div style={{ fontSize: 24, fontWeight: 700, color: k.color }}>{k.value}</div>
+              <div style={{ fontSize: 11, color: "var(--text-3)", marginTop: 3 }}>{k.label}</div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Tabs */}
+      <div style={{ display: "flex", gap: 6, borderBottom: "1px solid var(--border)", paddingBottom: 0 }}>
+        {TABS.map(t => (
+          <button key={t.id} onClick={() => setTab(t.id)} style={{
+            padding: "8px 16px", border: "none", borderRadius: "8px 8px 0 0",
+            background: tab === t.id ? "var(--surface-2)" : "transparent",
+            color: tab === t.id ? "var(--primary)" : "var(--text-2)",
+            fontWeight: tab === t.id ? 600 : 400, fontSize: 13, cursor: "pointer",
+            borderBottom: tab === t.id ? "2px solid var(--primary)" : "2px solid transparent",
+          }}>{t.label}</button>
+        ))}
+      </div>
+
+      {/* ── Tab Abeilles ── */}
+      {tab === "bees" && (
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))", gap: 14 }}>
+          {bees.map(bee => (
+            <BeeCard key={bee.domain} bee={bee} stats={statsMap[bee.domain]} />
+          ))}
+        </div>
+      )}
+
+      {/* ── Tab Dispatch ── */}
+      {tab === "dispatch" && (
+        <div style={{ display: "flex", flexDirection: "column", gap: 16, maxWidth: 700 }}>
+          <div style={{ background: "var(--surface-2)", borderRadius: 12, padding: 20, display: "flex", flexDirection: "column", gap: 14 }}>
+            <div style={{ fontSize: 14, fontWeight: 600, color: "var(--text)" }}>Dispatch une mission vers une abeille</div>
+
+            <div>
+              <label style={{ fontSize: 12, color: "var(--text-3)", display: "block", marginBottom: 6 }}>Mission</label>
+              <textarea
+                value={dispatch.mission}
+                onChange={e => setDispatch(p => ({ ...p, mission: e.target.value }))}
+                placeholder="Décris la mission... l'abeille sera choisie automatiquement ou force un domaine"
+                rows={3}
+                style={{
+                  width: "100%", padding: "10px 12px", borderRadius: 8,
+                  background: "var(--surface)", border: "1px solid var(--border)",
+                  color: "var(--text)", fontSize: 13, resize: "vertical",
+                  fontFamily: "inherit", boxSizing: "border-box",
+                }}
+              />
+            </div>
+
+            <div style={{ display: "flex", gap: 12 }}>
+              <div style={{ flex: 1 }}>
+                <label style={{ fontSize: 12, color: "var(--text-3)", display: "block", marginBottom: 6 }}>
+                  Forcer un domaine <span style={{ color: "var(--text-3)" }}>(optionnel)</span>
+                </label>
+                <select
+                  value={dispatch.domain}
+                  onChange={e => setDispatch(p => ({ ...p, domain: e.target.value }))}
+                  style={{
+                    width: "100%", padding: "8px 10px", borderRadius: 8,
+                    background: "var(--surface)", border: "1px solid var(--border)",
+                    color: "var(--text)", fontSize: 13, cursor: "pointer",
+                  }}
+                >
+                  <option value="">Auto (routage intelligent)</option>
+                  {bees.map(b => <option key={b.domain} value={b.domain}>{b.emoji} {b.name} ({b.domain})</option>)}
+                </select>
+              </div>
+              <div style={{ display: "flex", alignItems: "flex-end", gap: 8 }}>
+                <label style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer", fontSize: 12, color: "var(--text-2)" }}>
+                  <input
+                    type="checkbox"
+                    checked={dispatch.dry_run}
+                    onChange={e => setDispatch(p => ({ ...p, dry_run: e.target.checked }))}
+                    style={{ accentColor: "var(--primary)" }}
+                  />
+                  Dry run
+                </label>
               </div>
             </div>
-          ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-              {nodes.map(n => <NodeCard key={n.id} node={n} />)}
+
+            <div style={{ display: "flex", gap: 10 }}>
+              <button
+                onClick={handleClassify}
+                disabled={classifyLoading || !dispatch.mission.trim()}
+                style={{
+                  padding: "8px 16px", borderRadius: 8, border: "1px solid var(--border)",
+                  background: "var(--surface)", color: "var(--text-2)",
+                  fontSize: 13, cursor: "pointer", fontWeight: 500,
+                  opacity: classifyLoading || !dispatch.mission.trim() ? 0.5 : 1,
+                }}
+              >{classifyLoading ? "…" : "🔍 Classifier seulement"}</button>
+              <button
+                onClick={handleDispatch}
+                disabled={dispatchLoading || !dispatch.mission.trim()}
+                style={{
+                  flex: 1, padding: "8px 20px", borderRadius: 8, border: "none",
+                  background: "var(--primary)", color: "white",
+                  fontSize: 13, cursor: "pointer", fontWeight: 600,
+                  opacity: dispatchLoading || !dispatch.mission.trim() ? 0.6 : 1,
+                }}
+              >{dispatchLoading ? "Exécution en cours…" : "🚀 Dispatcher la mission"}</button>
+            </div>
+          </div>
+
+          {/* Résultat classification */}
+          {classifyResult && (
+            <div style={{ background: "var(--surface-2)", borderRadius: 10, padding: 16 }}>
+              <div style={{ fontSize: 13, fontWeight: 600, color: "var(--text)", marginBottom: 10 }}>Classification</div>
+              <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12 }}>
+                <span style={{ fontSize: 22 }}>{bees.find(b => b.domain === classifyResult.domain)?.emoji || "🐝"}</span>
+                <div>
+                  <div style={{ fontSize: 14, fontWeight: 700, color: "var(--text)" }}>{classifyResult.bee?.name}</div>
+                  <div style={{ fontSize: 11, color: "var(--text-3)" }}>
+                    Confiance : {Math.round((classifyResult.confidence || 0) * 100)}%
+                    {classifyResult.routable ? " ✅ routable" : " ⚠️ confiance faible"}
+                  </div>
+                </div>
+                <DomainBadge domain={classifyResult.domain} />
+              </div>
+              {classifyResult.all_scores && (
+                <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                  {Object.entries(classifyResult.all_scores)
+                    .sort((a, b) => b[1] - a[1])
+                    .map(([domain, score]) => (
+                      <div key={domain}>
+                        <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, color: "var(--text-2)", marginBottom: 2 }}>
+                          <span>{bees.find(b => b.domain === domain)?.emoji} {domain}</span>
+                          <span>{score.toFixed(2)}</span>
+                        </div>
+                        <ConfBar value={score / (Math.max(...Object.values(classifyResult.all_scores)) || 1)} domain={domain} />
+                      </div>
+                    ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Résultat dispatch */}
+          {dispatchResult && (
+            <div style={{ background: "var(--surface-2)", borderRadius: 10, padding: 16 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
+                <span style={{ fontSize: 16 }}>{dispatchResult.success ? "✅" : dispatchResult.dry_run ? "🔍" : "❌"}</span>
+                <span style={{ fontSize: 13, fontWeight: 600, color: "var(--text)" }}>
+                  {dispatchResult.dry_run ? "Résultat Dry Run" : dispatchResult.success ? "Mission réussie" : "Mission échouée"}
+                </span>
+                {dispatchResult.domain && <DomainBadge domain={dispatchResult.domain} />}
+                {dispatchResult.duration_ms && (
+                  <span style={{ fontSize: 11, color: "var(--text-3)", marginLeft: "auto" }}>
+                    {(dispatchResult.duration_ms / 1000).toFixed(1)}s
+                  </span>
+                )}
+              </div>
+              {dispatchResult.error && (
+                <div style={{ fontSize: 12, color: "var(--red)", marginBottom: 8 }}>{dispatchResult.error}</div>
+              )}
+              {dispatchResult.result?.final_answer && (
+                <pre style={{
+                  background: "var(--surface)", borderRadius: 8, padding: 12,
+                  fontSize: 11, color: "var(--text-2)", overflowX: "auto",
+                  whiteSpace: "pre-wrap", wordBreak: "break-word", maxHeight: 300,
+                  margin: 0,
+                }}>{dispatchResult.result.final_answer}</pre>
+              )}
             </div>
           )}
         </div>
-      </div>
+      )}
+
+      {/* ── Tab Historique ── */}
+      {tab === "log" && (
+        <div>
+          {log.length === 0 ? (
+            <div style={{ textAlign: "center", color: "var(--text-3)", padding: 40, fontSize: 13 }}>
+              Aucun routage effectué pour l'instant.
+            </div>
+          ) : (
+            <div>
+              {log.map(item => <LogRow key={item.id} item={item} />)}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── Tab Couches ── */}
+      {tab === "layers" && (
+        <div>
+          <div style={{ fontSize: 12, color: "var(--text-3)", marginBottom: 12 }}>
+            {Object.values(layerHealth).filter(Boolean).length} / {PYTHON_LAYERS.length} couches en ligne
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))", gap: 8 }}>
+            {PYTHON_LAYERS.map(l => (
+              <LayerStatus key={l.id} layer={l} healthy={layerHealth[l.port]} />
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
