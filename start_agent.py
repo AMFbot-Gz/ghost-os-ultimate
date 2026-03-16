@@ -125,6 +125,14 @@ LAYERS = [
         "depends_on": ["Brain", "Evolution", "Memory"],
     },
     {
+        "name": "Validator",
+        "file": "agent.validator",
+        "port": 8014,
+        "desc": "Skill Validator Loop — 5 checks + deploy/quarantine",
+        "emoji": "🔬",
+        "depends_on": ["Evolution"],
+    },
+    {
         "name": "SwarmRouter",
         "file": "agent.swarm_router",
         "port": 8013,

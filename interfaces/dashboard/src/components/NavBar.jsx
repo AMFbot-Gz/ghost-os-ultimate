@@ -15,6 +15,7 @@ const NAV_ITEMS = [
   { id: "hitl",         icon: "🔴", label: "HITL",           badge: "NEW" },
   { id: "pipeline",     icon: "🔗", label: "Pipelines",      badge: "NEW" },
   { id: "miner",        icon: "⛏", label: "Behavior Mining", badge: "NEW" },
+  { id: "validator",    icon: "🔬", label: "Validator",       badge: "NEW" },
   { id: "observability",icon: "🔭", label: "Observabilité" },
   { id: "agents",       icon: "🤖", label: "Agents" },
   { id: "skills",       icon: "🔧", label: "Skills" },

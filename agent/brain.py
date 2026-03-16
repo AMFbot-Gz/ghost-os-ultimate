@@ -2784,6 +2784,61 @@ async def miner_health():
     return await _proxy_miner("GET", "/health")
 
 
+# ─── Validator proxy (:8014) ──────────────────────────────────────────────────
+
+_VALIDATOR_URL = "http://localhost:8014"
+
+
+async def _proxy_validator(method: str, path: str, body: dict | None = None, params: dict | None = None):
+    try:
+        async with httpx.AsyncClient(timeout=90) as c:
+            if method == "GET":
+                r = await c.get(f"{_VALIDATOR_URL}{path}", params=params)
+            elif method == "POST":
+                r = await c.post(f"{_VALIDATOR_URL}{path}", json=body or {}, params=params)
+            else:
+                r = await c.request(method, f"{_VALIDATOR_URL}{path}", json=body, params=params)
+            r.raise_for_status()
+            return r.json()
+    except Exception as e:
+        return {"error": str(e), "layer": "validator", "path": path}
+
+
+@app.post("/validator/validate")
+async def validator_validate(req: dict):
+    return await _proxy_validator("POST", "/validate", req)
+
+
+@app.post("/validator/revalidate/{skill_name}")
+async def validator_revalidate(skill_name: str, req: dict = {}):
+    return await _proxy_validator("POST", f"/revalidate/{skill_name}", req)
+
+
+@app.get("/validator/runs")
+async def validator_runs(limit: int = Query(50)):
+    return await _proxy_validator("GET", "/runs", params={"limit": limit})
+
+
+@app.get("/validator/quarantine")
+async def validator_quarantine():
+    return await _proxy_validator("GET", "/quarantine")
+
+
+@app.post("/validator/quarantine/{skill_name}/restore")
+async def validator_restore(skill_name: str):
+    return await _proxy_validator("POST", f"/quarantine/{skill_name}/restore")
+
+
+@app.get("/validator/stats")
+async def validator_stats():
+    return await _proxy_validator("GET", "/stats")
+
+
+@app.get("/validator/health")
+async def validator_health():
+    return await _proxy_validator("GET", "/health")
+
+
 # ─── Swarm Router proxy (:8013) ───────────────────────────────────────────────
 
 _SWARM_URL = "http://localhost:8013"

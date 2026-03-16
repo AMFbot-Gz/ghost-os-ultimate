@@ -37,6 +37,7 @@ from fastapi.middleware.cors import CORSMiddleware
 MINER_PORT     = int(os.getenv("MINER_PORT",     "8012"))
 BRAIN_URL      = os.getenv("BRAIN_URL",      "http://localhost:8003")
 EVOLUTION_URL  = os.getenv("EVOLUTION_URL",  "http://localhost:8005")
+VALIDATOR_URL  = os.getenv("VALIDATOR_URL",  "http://localhost:8014")
 OLLAMA_HOST    = os.getenv("OLLAMA_HOST",    "http://localhost:11434")
 
 ROOT           = Path(__file__).parent.parent
@@ -569,18 +570,43 @@ async def _fill_top_gaps(n: int = 3) -> int:
                     "params":      {"context": "string"},
                 })
                 if r.status_code == 200:
+                    evo_result = r.json()
+                    # ── Phase 17 : validation automatique ──────────────────
+                    validated = False
+                    try:
+                        vr = await c.post(
+                            f"{VALIDATOR_URL}/validate",
+                            json={
+                                "name":            skill_name,
+                                "auto_deploy":     True,
+                                "auto_quarantine": True,
+                                "source":          "miner",
+                            },
+                            timeout=60,
+                        )
+                        if vr.status_code == 200:
+                            v = vr.json()
+                            validated = v.get("passed", False)
+                            status = "✅ validé" if validated else f"🔒 quarantaine ({', '.join(v.get('checks_failed', []))})"
+                            print(f"[Miner] Validator → {skill_name} : {status}")
+                    except Exception as ve:
+                        print(f"[Miner] ⚠️  validator unreachable: {ve} — skill généré sans validation")
+                        validated = evo_result.get("syntax_ok", False)
+                    # ── Marquer le pattern comme traité ───────────────────
                     with _conn() as db:
                         db.execute(
                             "UPDATE patterns SET generated_skill=? WHERE id=?",
                             (skill_name, p["id"]),
                         )
                     await _emit_signal("skill_generated", {
-                        "skill":   skill_name,
-                        "pattern": p["label"],
-                        "domain":  p["domain"],
+                        "skill":     skill_name,
+                        "pattern":   p["label"],
+                        "domain":    p["domain"],
                         "gap_score": p["gap_score"],
+                        "validated": validated,
                     })
-                    generated += 1
+                    if validated:
+                        generated += 1
         except Exception as e:
             print(f"[Miner] ⚠️  gap-fill failed for {skill_name}: {e}")
 
@@ -753,8 +779,24 @@ async def generate_skill_for_gap(pattern_id: str):
                 with _conn() as db:
                     db.execute("UPDATE patterns SET generated_skill=? WHERE id=?",
                                (skill_name, pattern_id))
-                await _emit_signal("skill_generated", {"skill": skill_name, "pattern": p["label"]})
-                return {"ok": True, "skill": skill_name}
+                # Phase 17 : validation automatique
+                validation = None
+                try:
+                    vr = await c.post(
+                        f"{VALIDATOR_URL}/validate",
+                        json={"name": skill_name, "auto_deploy": True,
+                              "auto_quarantine": True, "source": "miner_manual"},
+                        timeout=60,
+                    )
+                    if vr.status_code == 200:
+                        validation = vr.json()
+                except Exception:
+                    pass
+                await _emit_signal("skill_generated", {
+                    "skill": skill_name, "pattern": p["label"],
+                    "validated": validation.get("passed") if validation else None,
+                })
+                return {"ok": True, "skill": skill_name, "validation": validation}
     except Exception as e:
         return {"ok": False, "error": str(e)}
     return {"ok": False, "error": "Evolution service error"}
