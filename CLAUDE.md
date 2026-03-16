@@ -17,7 +17,7 @@ Ghost OS Ultimate v1.0.0
 │   └── WebSocket HUD :9001
 │
 ├── agent/                               ← 9 couches Python FastAPI
-│   ├── queen.py          :8001  Orchestrateur + HITL + Telegram
+│   ├── queen.py          :8001  Orchestrateur + HITL + Telegram (Phase 12)
 │   ├── perception.py     :8002  Screenshots + scan système
 │   ├── brain.py          :8003  LLM routing (Claude → Kimi → Ollama)
 │   ├── executor.py       :8004  Shell sandboxé + PyAutoGUI

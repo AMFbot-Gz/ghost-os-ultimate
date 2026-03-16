@@ -98,6 +98,10 @@ DB_LOCK: asyncio.Lock | None = None
 # Throttle pour la boucle vitale (fix #9)
 _HITL_SENT_TS: dict[str, float] = {}
 
+# Historique HITL (en mémoire, 200 dernières décisions)
+HITL_HISTORY: list = []
+HITL_HISTORY_MAX = 200
+
 
 def _now_utc() -> datetime:
     return datetime.now(timezone.utc)
@@ -248,6 +252,7 @@ async def _hitl_timeout_watchdog(hitl_id: str):
     async with HITL_LOCK:
         entry = HITL_QUEUE.pop(hitl_id, None)
     if entry is not None:
+        _record_hitl_history(hitl_id, entry, "timeout")
         print(f"[Queen] HITL timeout: {hitl_id} — action annulée: {entry['action'][:60]}")
         await send_telegram(
             f"⏱ *HITL timeout* — ID `{hitl_id}` expiré après {HITL_TIMEOUT}s\n"
@@ -262,6 +267,7 @@ async def hitl_approve(hitl_id: str):
     if entry is None:
         await send_telegram(f"⚠️ ID `{hitl_id}` inconnu ou déjà traité.")
         return
+    _record_hitl_history(hitl_id, entry, "approved")
     await send_telegram(f"✅ *HITL approuvé* — `{hitl_id}`\nExécution en cours…")
     asyncio.create_task(_execute_hitl_subtask(entry))
 
@@ -273,10 +279,29 @@ async def hitl_reject(hitl_id: str):
     if entry is None:
         await send_telegram(f"⚠️ ID `{hitl_id}` inconnu ou déjà traité.")
         return
+    _record_hitl_history(hitl_id, entry, "rejected")
     await send_telegram(
         f"🛑 *HITL annulé* — `{hitl_id}`\n"
         f"Action abandonnée: `{entry['action'][:80]}`"
     )
+
+
+def _record_hitl_history(hitl_id: str, entry: dict, decision: str):
+    """Enregistre une décision HITL dans l'historique en mémoire."""
+    record = {
+        "hitl_id":    hitl_id,
+        "decision":   decision,          # "approved" | "rejected" | "timeout"
+        "action":     entry.get("action", ""),
+        "mission_id": entry.get("mission_id", ""),
+        "input_text": entry.get("input_text", ""),
+        "risk":       entry.get("subtask", {}).get("risk", "high"),
+        "decided_at": _now_utc().isoformat(),
+        "queued_at":  entry.get("timestamp", _now_utc()).isoformat() if isinstance(entry.get("timestamp"), datetime) else str(entry.get("timestamp", "")),
+    }
+    HITL_HISTORY.append(record)
+    # Garder les 200 derniers
+    if len(HITL_HISTORY) > HITL_HISTORY_MAX:
+        del HITL_HISTORY[:len(HITL_HISTORY) - HITL_HISTORY_MAX]
 
 
 async def _execute_hitl_subtask(entry: dict):
@@ -1009,6 +1034,56 @@ async def hitl_queue():
         "count": len(items),
         "timeout_seconds": HITL_TIMEOUT,
         "items": items
+    }
+
+
+@app.post("/hitl/approve/{hitl_id}")
+async def hitl_approve_endpoint(hitl_id: str):
+    """Approuve une action HITL via HTTP (dashboard)."""
+    await hitl_approve(hitl_id)
+    return {"ok": True, "hitl_id": hitl_id, "decision": "approved"}
+
+
+@app.post("/hitl/reject/{hitl_id}")
+async def hitl_reject_endpoint(hitl_id: str):
+    """Rejette une action HITL via HTTP (dashboard)."""
+    await hitl_reject(hitl_id)
+    return {"ok": True, "hitl_id": hitl_id, "decision": "rejected"}
+
+
+@app.get("/hitl/history")
+async def hitl_history(limit: int = 50):
+    """Retourne l'historique des décisions HITL (max 200 en mémoire)."""
+    items = HITL_HISTORY[-limit:] if limit < len(HITL_HISTORY) else HITL_HISTORY[:]
+    return {"count": len(items), "items": list(reversed(items))}
+
+
+@app.get("/hitl/stats")
+async def hitl_stats():
+    """Statistiques HITL : taux d'approbation, temps de réponse moyen."""
+    total = len(HITL_HISTORY)
+    if total == 0:
+        return {"total": 0, "approved": 0, "rejected": 0, "timeout": 0, "approval_rate": 0.0, "avg_response_ms": 0.0}
+    approved  = sum(1 for r in HITL_HISTORY if r["decision"] == "approved")
+    rejected  = sum(1 for r in HITL_HISTORY if r["decision"] == "rejected")
+    timeout   = sum(1 for r in HITL_HISTORY if r["decision"] == "timeout")
+    durations = []
+    for r in HITL_HISTORY:
+        try:
+            queued_at  = datetime.fromisoformat(r["queued_at"])
+            decided_at = datetime.fromisoformat(r["decided_at"])
+            durations.append((decided_at - queued_at).total_seconds() * 1000)
+        except Exception:
+            pass
+    avg_ms = sum(durations) / len(durations) if durations else 0.0
+    return {
+        "total":         total,
+        "approved":      approved,
+        "rejected":      rejected,
+        "timeout":       timeout,
+        "approval_rate": round(approved / total * 100, 1) if total > 0 else 0.0,
+        "avg_response_ms": round(avg_ms, 0),
+        "pending":       len(HITL_QUEUE),
     }
 
 
