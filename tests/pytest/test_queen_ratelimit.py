@@ -15,7 +15,7 @@ import os
 import subprocess
 import unittest.mock as mock
 
-_ROOT = os.path.join(os.path.dirname(__file__), '..')
+_ROOT = os.path.join(os.path.dirname(__file__), '..', '..')
 _QUEEN_PATH = os.path.join(_ROOT, 'agent', 'queen.py')
 
 

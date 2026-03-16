@@ -17,7 +17,7 @@ import tempfile
 import os
 import shutil
 
-_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
 _CHIMERA_BUS = os.path.join(_ROOT, 'core', 'chimera_bus.js')
 
 

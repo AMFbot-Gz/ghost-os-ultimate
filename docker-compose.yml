@@ -6,7 +6,7 @@ version: "3.9"
 #   TELEGRAM_MODE=python docker-compose up    → mode gateway (webhook Telegram Python)
 
 services:
-  # ─── Ghost OS Ultimate (Queen Node.js + 7 couches Python) ──────────────────
+  # ─── Ghost OS Ultimate (Queen Node.js + 16 couches Python) ─────────────────
   ghost-os:
     build:
       context: .
@@ -22,10 +22,21 @@ services:
       - "8005:8005"    # Evolution
       - "8006:8006"    # Memory
       - "8007:8007"    # MCP Bridge
+      - "8008:8008"    # Planner (HTN — Phase 10)
+      - "8009:8009"    # Learner (Skill Learning — Phase 11)
+      - "8010:8010"    # Goals (Autonomous Goal Loop — Phase 13)
+      - "8011:8011"    # Pipeline (Skill Pipeline Composer — Phase 14)
+      - "8012:8012"    # Miner (Behavior Mining — Phase 15)
+      - "8013:8013"    # SwarmRouter (Bee Specialization — Phase 16)
+      - "8014:8014"    # Validator (Skill Validator Loop — Phase 17)
+      - "8015:8015"    # ComputerUse (GUI Sessions — Phase 18)
+      - "8016:8016"    # ConsciousnessBridge (NeuralEventBus — Phase 19)
       - "9001:9001"    # HUD WebSocket
     volumes:
       - ghost_data:/app/.laruche
       - ghost_memory:/app/agent/memory
+      - ghost_skills:/app/skills
+      - ghost_logs:/app/agent/logs
     environment:
       - NODE_ENV=production
       - STANDALONE_MODE=true
@@ -39,14 +50,18 @@ services:
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
       - TELEGRAM_MODE=${TELEGRAM_MODE:-node}
       - GHOST_MODEL=${GHOST_MODEL:-ollama/llama3}
+      # Phases 10-19
+      - VALIDATOR_URL=http://localhost:8014
+      - SWARM_URL=http://localhost:8013
+      - CONSCIOUSNESS_BRIDGE_URL=http://localhost:8016
     extra_hosts:
       - "host.docker.internal:host-gateway"
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:3000/api/health"]
+      test: ["CMD-SHELL", "curl -sf http://localhost:3000/api/health && curl -sf http://localhost:8001/health && curl -sf http://localhost:8016/health"]
       interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 45s
+      timeout: 15s
+      retries: 5
+      start_period: 90s
 
   # ─── Dashboard React (optionnel) ────────────────────────────────────────────
   ghost-dashboard:
@@ -67,3 +82,7 @@ volumes:
     name: ghost-os-data
   ghost_memory:
     name: ghost-os-memory
+  ghost_skills:
+    name: ghost-os-skills
+  ghost_logs:
+    name: ghost-os-logs

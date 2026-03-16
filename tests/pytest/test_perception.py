@@ -15,7 +15,7 @@ import tempfile
 import unittest.mock as mock
 from pathlib import Path
 
-_ROOT = os.path.join(os.path.dirname(__file__), '..')
+_ROOT = os.path.join(os.path.dirname(__file__), '..', '..')
 _FILE_PATH = os.path.join(_ROOT, 'agent', 'perception.py')
 
 

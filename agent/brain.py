@@ -441,14 +441,6 @@ async def llm(role: str, messages: list, system: str = "") -> dict:
             except Exception as e:
                 _provider_failures['ollama'] = _provider_failures.get('ollama', 0) + 1
                 print(f"[Brain] GHOST_MODEL ollama override failed: {e}")
-        elif _ghost_vendor == 'openai':
-            try:
-                content = await call_openai(messages, system)
-                _provider_failures['openai'] = 0
-                return {'content': content, 'provider': 'openai', 'model': _ghost_model}
-            except Exception as e:
-                _provider_failures['openai'] = _provider_failures.get('openai', 0) + 1
-                print(f"[Brain] GHOST_MODEL openai override failed: {e}")
         elif _ghost_vendor == 'kimi':
             try:
                 content = await call_kimi(messages, system)
@@ -457,6 +449,14 @@ async def llm(role: str, messages: list, system: str = "") -> dict:
             except Exception as e:
                 _provider_failures['kimi'] = _provider_failures.get('kimi', 0) + 1
                 print(f"[Brain] GHOST_MODEL kimi override failed: {e}")
+        elif _ghost_vendor == 'openai':
+            try:
+                content = await call_openai(messages, system)
+                _provider_failures['openai'] = 0
+                return {'content': content, 'provider': 'openai', 'model': _ghost_model}
+            except Exception as e:
+                _provider_failures['openai'] = _provider_failures.get('openai', 0) + 1
+                print(f"[Brain] GHOST_MODEL openai override failed: {e}")
         # Si l'override échoue, on continue avec le routing normal ci-dessous
     # ─────────────────────────────────────────────────────────────────────────
 

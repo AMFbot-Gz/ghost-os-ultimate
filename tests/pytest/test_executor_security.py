@@ -61,7 +61,7 @@ MOCK_CONFIG = {
 }
 
 # Chemin racine du projet (deux niveaux au-dessus de tests/)
-_ROOT = os.path.join(os.path.dirname(__file__), '..')
+_ROOT = os.path.join(os.path.dirname(__file__), '..', '..')
 _AGENT_CONFIG = os.path.join(_ROOT, 'agent_config.yml')
 
 EXECUTOR_AVAILABLE = False

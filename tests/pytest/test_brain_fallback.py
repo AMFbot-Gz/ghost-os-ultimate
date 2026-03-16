@@ -14,7 +14,7 @@ import os
 import subprocess
 import unittest.mock as mock
 
-_ROOT = os.path.join(os.path.dirname(__file__), '..')
+_ROOT = os.path.join(os.path.dirname(__file__), '..', '..')
 _BRAIN_PATH = os.path.join(_ROOT, 'agent', 'brain.py')
 
 # ─────────────────────────────────────────────────────────────────────────────

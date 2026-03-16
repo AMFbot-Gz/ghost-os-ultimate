@@ -35,6 +35,7 @@ core:
 
 # ─── Ports des couches Python ─────────────────────────────────────────────────
 ports:
+  # Couches fondamentales (Phases 1-7)
   queen: 8001
   perception: 8002
   brain: 8003
@@ -42,7 +43,18 @@ ports:
   evolution: 8005
   memory: 8006
   mcp_bridge: 8007
-  # Node.js Queen
+  # Couches avancées (Phases 10-15)
+  planner: 8008
+  learner: 8009
+  goals: 8010
+  pipeline: 8011
+  miner: 8012
+  # Production Shell (Phases 16-19)
+  swarm_router: 8013
+  validator: 8014
+  computer_use: 8015
+  consciousness_bridge: 8016
+  # Node.js + Frontend
   node_queen: 3000
   hud: 9001
   dashboard: 5173
@@ -168,3 +180,58 @@ mlx:
   model_path: "./mlx-models/qwen3-7b"
   server_url: "http://127.0.0.1:8080/v1"
   fallback_to_ollama: true
+
+# ─── Validator — Confidence Score (Phase 17+) ────────────────────────────────
+validator:
+  exec_timeout_s: 12
+  check_weights:
+    security:  0.30    # hard-block — le plus critique
+    execution: 0.28    # doit s'exécuter sans crash
+    syntax:    0.18    # ESM valide
+    output:    0.14    # contrat {success:bool}
+    structure: 0.10    # export async function run()
+  tier_thresholds:
+    gold:      0.85    # déployé immédiatement
+    silver:    0.65    # déployé + review_flag
+    bronze:    0.40    # déployé + needs_review
+    quarantine: 0.0   # skills/_quarantine/
+  quarantine_dir: "skills/_quarantine"
+
+# ─── Swarm Router — Bee Specialization (Phase 16) ────────────────────────────
+swarm:
+  bees:
+    - { name: UIAgent,     emoji: "🎨", domain: ui }
+    - { name: FileAgent,   emoji: "📁", domain: file }
+    - { name: CodeAgent,   emoji: "💻", domain: code }
+    - { name: WebAgent,    emoji: "🌐", domain: web }
+    - { name: SystemAgent, emoji: "🖥️",  domain: system }
+  min_confidence: 0.10      # Score minimum pour dispatch spécialisé
+  fallback_domain: code     # Domaine par défaut si aucun score suffisant
+
+# ─── Consciousness Bridge (Phase 19) ─────────────────────────────────────────
+consciousness:
+  bridge_url: "http://localhost:8016"
+  health_poll_interval_s: 30          # Poll santé des 15 couches toutes les 30s
+  signal_poll_ms: 500                 # Lecture signals.jsonl toutes les 500ms
+  max_events_buffer: 500              # Événements NeuralEventBus en mémoire
+  max_signals_buffer: 200             # Signaux phéromone en mémoire
+  websocket_ping_interval_s: 10       # Ping clients WS
+
+# ─── Computer Use (Phase 18) ─────────────────────────────────────────────────
+computer_use:
+  max_steps_default: 20
+  max_steps_limit: 40
+  wait_cap_ms: 5000
+  vision_model: "moondream:latest"    # Modèle vision pour screenshot+describe
+  failsafe: true                      # pyautogui FAILSAFE coin haut-gauche
+
+# ─── Production Shell (Phase 20) ─────────────────────────────────────────────
+production:
+  pm2_ecosystem: "ecosystem.config.js"
+  docker_compose: "docker-compose.yml"
+  health_check_script: "scripts/health_check.sh"
+  log_dir: "agent/logs"
+  test_command_pytest: "python3 -m pytest tests/pytest/ -v --tb=short"
+  test_command_jest: "node --experimental-vm-modules node_modules/.bin/jest"
+  start_command: "python3 start_agent.py"
+  total_python_layers: 16             # Phases 1-19 complètes

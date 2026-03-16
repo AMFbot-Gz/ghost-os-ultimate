@@ -309,7 +309,8 @@ async def _execute_action(action_type: str, action_input: str, session_id: str) 
                 # Utilise shell osascript pour les raccourcis complexes
                 combo = action_input.lower().strip()
                 # Mapping raccourcis → pyautogui hotkey
-                key_cmd = f'python3 -c "import pyautogui; pyautogui.FAILSAFE=True; pyautogui.hotkey(*{json.dumps(combo.split(\"|\"))})"'
+                _pipe_parts = combo.split("|")
+                key_cmd = f'python3 -c "import pyautogui; pyautogui.FAILSAFE=True; pyautogui.hotkey(*{json.dumps(_pipe_parts)})"'
                 if "+" in combo:
                     parts  = combo.split("+")
                     key_cmd = f'python3 -c "import pyautogui; pyautogui.FAILSAFE=True; pyautogui.hotkey(*{json.dumps(parts)})"'

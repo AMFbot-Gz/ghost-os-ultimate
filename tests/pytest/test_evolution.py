@@ -13,7 +13,7 @@ import os
 import subprocess
 import unittest.mock as mock
 
-_ROOT = os.path.join(os.path.dirname(__file__), '..')
+_ROOT = os.path.join(os.path.dirname(__file__), '..', '..')
 _FILE_PATH = os.path.join(_ROOT, 'agent', 'evolution.py')
 
 
@@ -88,8 +88,8 @@ class TestEvolutionStaticAnalysis:
         assert 'def get_repair_backend(' in self.content
 
     def test_skills_dir_defined(self):
-        """SKILLS_DIR doit être défini."""
-        assert 'SKILLS_DIR' in self.content
+        """SKILLS_DIR ou SKILLS_PY_DIR doit être défini."""
+        assert 'SKILLS_DIR' in self.content or 'SKILLS_PY_DIR' in self.content
 
     def test_repair_request_model(self):
         """RepairRequest pydantic model doit être défini."""
