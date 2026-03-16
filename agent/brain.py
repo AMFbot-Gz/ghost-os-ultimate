@@ -155,6 +155,86 @@ RÈGLES rollback_needed :
 
 rollback_action : commande bash exacte pour annuler, ou null si pas de rollback possible/nécessaire"""
 
+# ─── Prompts Tree of Thoughts ──────────────────────────────────────────────
+
+TOT_EXPAND_PROMPT = """Tu es un moteur de raisonnement Tree of Thoughts pour Ghost OS Ultimate.
+Mission : {mission}
+Profondeur actuelle : {depth}
+Chemin de pensées suivi jusqu'ici :
+{path_so_far}
+
+Génère exactement {n_branches} pensées candidates DISTINCTES et DIVERSIFIÉES pour progresser vers la solution.
+
+Réponds UNIQUEMENT en JSON valide (sans markdown) :
+
+{{
+  "thoughts": [
+    {{
+      "id": "t1",
+      "thought": "description concise de cette approche (2-3 phrases max)",
+      "approach": "nom court de la stratégie",
+      "actions_preview": ["étape 1", "étape 2"]
+    }}
+  ]
+}}
+
+RÈGLES DE DIVERSITÉ — chaque pensée doit être une STRATÉGIE DIFFÉRENTE :
+- Pensée 1 : approche directe / la plus simple
+- Pensée 2 : approche alternative / indirecte
+- Pensée 3 : approche créative / hors-sentier
+- Évite les variations du même plan (ne reformule pas)
+- Si la solution est évidente depuis le chemin déjà suivi, inclure une pensée "done" avec la réponse complète
+- Chaque pensée doit être auto-suffisante et concrète (actionnables, pas des généralités)"""
+
+TOT_EVALUATE_PROMPT = """Tu es un évaluateur Tree of Thoughts pour Ghost OS Ultimate.
+Mission originale : {mission}
+Chemin de pensées suivi : {path_so_far}
+Pensée à évaluer : {thought}
+
+Évalue cette pensée sur 3 axes et retourne un score global.
+
+Réponds UNIQUEMENT en JSON valide (sans markdown) :
+
+{{
+  "score": 0.0,
+  "feasibility": 0.0,
+  "relevance": 0.0,
+  "safety": 1.0,
+  "reason": "justification courte (1 phrase)",
+  "is_solution": false,
+  "solution_summary": null
+}}
+
+BARÈME score (0.0 → 1.0) :
+- 0.9-1.0 : chemin optimal — mène directement et efficacement à la solution
+- 0.7-0.9 : bon chemin — approche prometteuse, quelques étapes restantes
+- 0.5-0.7 : chemin acceptable — pourrait fonctionner mais risques ou inefficacités
+- 0.3-0.5 : chemin faible — risque de dérailler ou de prendre trop de temps
+- 0.0-0.3 : chemin à abandonner — impasse, dangereux, ou hors-sujet
+
+feasibility : peut-on réellement exécuter cette pensée ? (0=impossible, 1=trivial)
+relevance   : est-ce que ça avance vers l'objectif ? (0=hors-sujet, 1=cœur du problème)
+safety      : risque pour le système ? (0=destructeur, 1=100% sûr)
+
+is_solution = true SEULEMENT si cette pensée représente une solution COMPLÈTE et VÉRIFIABLE à la mission.
+solution_summary : résumé actionnable de la solution si is_solution=true, sinon null."""
+
+TOT_SOLUTION_PROMPT = """Tu es le cerveau de Ghost OS Ultimate.
+La mission "{mission}" a été analysée via Tree of Thoughts.
+
+Chemin optimal trouvé (du plus général au plus précis) :
+{optimal_path}
+
+Score de confiance : {best_score}
+
+Sur la base de ce chemin de réflexion, produis un plan d'exécution CONCRET :
+- Étapes numérotées et actionnables
+- Commandes bash spécifiques si nécessaire (avec le bon working directory)
+- Risques identifiés et mesures de mitigation
+- Critère de succès vérifiable (comment savoir que c'est fait ?)
+
+Sois direct et pratique — ce plan sera exécuté par Ghost OS."""
+
 # ─── Provider-agnostic model config (format vendor/model, inspiré PicoClaw) ──
 GHOST_MODEL = os.environ.get('GHOST_MODEL', '')  # ex: 'anthropic/claude-opus-4-6'
 
@@ -1283,6 +1363,246 @@ async def supervise_loop(
     }
 
 
+# ─── Tree of Thoughts ─────────────────────────────────────────────────────
+
+async def _tot_expand(
+    mission: str,
+    depth: int,
+    path_so_far: List[str],
+    n_branches: int,
+) -> List[dict]:
+    """Génère n_branches pensées candidates depuis l'état courant (BFS node expansion)."""
+    path_text = (
+        "\n".join(f"  {i+1}. {t}" for i, t in enumerate(path_so_far))
+        if path_so_far else "  (point de départ — première expansion)"
+    )
+    prompt = (
+        TOT_EXPAND_PROMPT
+        .replace("{mission}",    mission)
+        .replace("{depth}",      str(depth))
+        .replace("{path_so_far}", path_text)
+        .replace("{n_branches}", str(n_branches))
+    )
+    try:
+        result = await llm_react(
+            messages=[{"role": "user", "content": "Génère les pensées candidates."}],
+            system=prompt,
+        )
+        raw = result["content"].strip()
+        brace_start = raw.find("{")
+        brace_end   = raw.rfind("}")
+        if brace_start != -1 and brace_end != -1:
+            data = json.loads(raw[brace_start:brace_end + 1])
+            thoughts = data.get("thoughts", [])
+            if isinstance(thoughts, list) and thoughts:
+                return thoughts[:n_branches]
+    except Exception as e:
+        print(f"[Brain/ToT] Expand error depth={depth}: {e}")
+    # Fallback si le LLM échoue
+    return [{"id": "t1", "thought": f"Approche directe pour résoudre: {mission}", "approach": "direct", "actions_preview": []}]
+
+
+async def _tot_evaluate(
+    mission: str,
+    thought: str,
+    path_so_far: List[str],
+) -> dict:
+    """Score une pensée candidate sur feasibility/relevance/safety → retourne dict avec is_solution."""
+    path_text = (
+        "\n".join(f"  {i+1}. {t}" for i, t in enumerate(path_so_far))
+        if path_so_far else "  (point de départ)"
+    )
+    prompt = (
+        TOT_EVALUATE_PROMPT
+        .replace("{mission}",    mission)
+        .replace("{path_so_far}", path_text)
+        .replace("{thought}",    thought)
+    )
+    _default = {"score": 0.5, "feasibility": 0.5, "relevance": 0.5, "safety": 1.0,
+                "reason": "eval failed", "is_solution": False, "solution_summary": None}
+    try:
+        result = await llm("strategist",
+                           [{"role": "user", "content": "Évalue cette pensée."}],
+                           prompt)
+        raw = result["content"].strip()
+        brace_start = raw.find("{")
+        brace_end   = raw.rfind("}")
+        if brace_start != -1 and brace_end != -1:
+            data = json.loads(raw[brace_start:brace_end + 1])
+            return {
+                "score":            min(max(float(data.get("score",       0.5)), 0.0), 1.0),
+                "feasibility":      min(max(float(data.get("feasibility", 0.5)), 0.0), 1.0),
+                "relevance":        min(max(float(data.get("relevance",   0.5)), 0.0), 1.0),
+                "safety":           min(max(float(data.get("safety",      1.0)), 0.0), 1.0),
+                "reason":           str(data.get("reason", "")),
+                "is_solution":      bool(data.get("is_solution", False)),
+                "solution_summary": data.get("solution_summary"),
+            }
+    except Exception as e:
+        print(f"[Brain/ToT] Evaluate error: {e}")
+    return _default
+
+
+async def tot_loop(
+    mission: str,
+    max_depth:  int = 4,
+    n_branches: int = 3,
+    beam_width: int = 2,
+    timeout:    int = 120,
+) -> dict:
+    """
+    Tree of Thoughts BFS avec beam search.
+
+    À chaque niveau de profondeur :
+      1. Pour chaque noeud du beam, expand → n_branches pensées (en parallèle)
+      2. Évaluer toutes les pensées candidates (en parallèle)
+      3. Pruning : garder les beam_width meilleurs noeuds
+      4. Si is_solution=True → arrêter et générer le plan d'exécution final
+
+    Retourne le chemin optimal + plan d'exécution actionnable.
+    """
+    started    = time.time()
+    mission_id = uuid.uuid4().hex[:8]
+    print(f"[Brain/ToT] 🌳 Start mission={mission_id} depth={max_depth} branches={n_branches} beam={beam_width}")
+
+    # Beam courant : liste de noeuds {"path": [...], "score": float, "is_solution": bool, ...}
+    beam: List[dict] = [{"path": [], "score": 1.0, "feasibility": 1.0, "relevance": 1.0,
+                          "safety": 1.0, "reason": "root", "is_solution": False,
+                          "solution_summary": None, "depth": 0}]
+    all_nodes: List[dict] = []
+    best_solution: Optional[dict] = None
+
+    for depth in range(1, max_depth + 1):
+        elapsed = time.time() - started
+        if elapsed > timeout:
+            print(f"[Brain/ToT] ⏰ Timeout à depth={depth} ({elapsed:.0f}s)")
+            break
+
+        print(f"[Brain/ToT] ── Depth {depth}/{max_depth}  beam_size={len(beam)}")
+
+        # ── Expansion parallèle ────────────────────────────────────────────
+        expand_results = await asyncio.gather(
+            *[_tot_expand(mission, depth, node["path"], n_branches) for node in beam],
+            return_exceptions=True,
+        )
+
+        candidates: List[tuple] = []  # (parent_path, thought_text)
+        for node, expansion in zip(beam, expand_results):
+            if isinstance(expansion, Exception):
+                print(f"[Brain/ToT] Expand exception: {expansion}")
+                continue
+            for t in expansion:
+                thought_text = t.get("thought", str(t))
+                candidates.append((node["path"][:], thought_text))
+
+        if not candidates:
+            print(f"[Brain/ToT] Aucun candidat à depth={depth} — arrêt")
+            break
+
+        # ── Évaluation parallèle ───────────────────────────────────────────
+        eval_results = await asyncio.gather(
+            *[_tot_evaluate(mission, thought, path) for path, thought in candidates],
+            return_exceptions=True,
+        )
+
+        scored: List[dict] = []
+        for (path, thought), ev in zip(candidates, eval_results):
+            if isinstance(ev, Exception):
+                ev = {"score": 0.3, "feasibility": 0.3, "relevance": 0.3, "safety": 1.0,
+                      "reason": str(ev), "is_solution": False, "solution_summary": None}
+            node = {
+                "path":             path + [thought],
+                "score":            ev["score"],
+                "feasibility":      ev["feasibility"],
+                "relevance":        ev["relevance"],
+                "safety":           ev["safety"],
+                "reason":           ev["reason"],
+                "is_solution":      ev["is_solution"],
+                "solution_summary": ev["solution_summary"],
+                "depth":            depth,
+            }
+            scored.append(node)
+            all_nodes.append(node)
+            flag = "✅" if node["is_solution"] else "  "
+            print(f"[Brain/ToT]   {flag} score={node['score']:.2f} → {thought[:70]}…")
+
+            if node["is_solution"] and node["score"] > (best_solution["score"] if best_solution else 0.0):
+                best_solution = node
+
+        if best_solution:
+            print(f"[Brain/ToT] 🎯 Solution trouvée à depth={depth} score={best_solution['score']:.2f}")
+            break
+
+        # ── Beam pruning ───────────────────────────────────────────────────
+        scored.sort(key=lambda n: n["score"], reverse=True)
+        beam = scored[:beam_width]
+        if not beam:
+            print(f"[Brain/ToT] Beam vide à depth={depth} — arrêt")
+            break
+
+    # Si aucune solution explicite → meilleur noeud du beam final
+    if not best_solution:
+        if beam:
+            best_solution = beam[0]
+            status = "best_path"
+            print(f"[Brain/ToT] Pas de solution explicite, meilleur path score={best_solution['score']:.2f}")
+        else:
+            return {
+                "mission_id":  mission_id,
+                "status":      "failed",
+                "reason":      "Beam vide — aucun chemin exploré",
+                "all_nodes":   all_nodes,
+                "duration_ms": int((time.time() - started) * 1000),
+            }
+    else:
+        status = "solution_found"
+
+    # ── Plan d'exécution final ─────────────────────────────────────────────
+    optimal_path = best_solution["path"]
+    path_text    = "\n".join(f"  {i+1}. {t}" for i, t in enumerate(optimal_path))
+    plan_prompt  = (
+        TOT_SOLUTION_PROMPT
+        .replace("{mission}",    mission)
+        .replace("{optimal_path}", path_text)
+        .replace("{best_score}", f"{best_solution['score']:.2f}")
+    )
+    try:
+        plan_result    = await llm("strategist",
+                                   [{"role": "user", "content": "Produis le plan d'exécution."}],
+                                   plan_prompt)
+        execution_plan = plan_result["content"]
+        provider       = plan_result["provider"]
+        model_used     = plan_result["model"]
+    except Exception as e:
+        execution_plan = f"Erreur génération plan: {e}"
+        provider       = "unknown"
+        model_used     = "unknown"
+
+    return {
+        "mission_id":       mission_id,
+        "status":           status,
+        "goal":             mission,
+        "optimal_path":     optimal_path,
+        "path_depth":       len(optimal_path),
+        "best_score":       round(best_solution["score"],       3),
+        "feasibility":      round(best_solution["feasibility"], 3),
+        "relevance":        round(best_solution["relevance"],   3),
+        "safety":           round(best_solution["safety"],      3),
+        "solution_summary": best_solution.get("solution_summary"),
+        "execution_plan":   execution_plan,
+        "tree_stats": {
+            "total_nodes_explored": len(all_nodes),
+            "max_depth_reached":    max((n["depth"] for n in all_nodes), default=0),
+            "n_branches":           n_branches,
+            "beam_width":           beam_width,
+        },
+        "all_nodes":   all_nodes,
+        "provider":    provider,
+        "model":       model_used,
+        "duration_ms": int((time.time() - started) * 1000),
+    }
+
+
 # ─── Models ───────────────────────────────────────────────────────────────
 
 class ThinkRequest(BaseModel):
@@ -1318,6 +1638,14 @@ class SuperviseRequest(BaseModel):
     max_workers:      int = 5
     timeout_per_step: int = 60
     mission_type:     str = "general"
+
+
+class ToTRequest(BaseModel):
+    mission:    str
+    max_depth:  int = 4    # profondeur max de l'arbre de pensées
+    n_branches: int = 3    # pensées générées par noeud
+    beam_width: int = 2    # top-K conservés par niveau (beam search)
+    timeout:    int = 120  # secondes max au total
 
 
 class CompressRequest(BaseModel):
@@ -1521,6 +1849,33 @@ async def supervise(req: SuperviseRequest):
     )
 
 
+@app.post("/tot")
+async def tree_of_thoughts(req: ToTRequest):
+    """
+    Tree of Thoughts BFS avec beam search — exploration multi-chemins parallèle.
+
+    À chaque profondeur :
+      1. Expand : génère n_branches pensées candidates par noeud du beam (en parallèle)
+      2. Evaluate : score chaque pensée sur feasibility/relevance/safety (en parallèle)
+      3. Prune : garde les beam_width meilleurs chemins
+      4. Si is_solution=True → arrêt et génération du plan d'exécution final
+
+    Corps :
+      mission    — la tâche à résoudre
+      max_depth  — profondeur max de l'arbre (défaut: 4)
+      n_branches — branches générées par noeud (défaut: 3)
+      beam_width — taille du beam / top-K conservés (défaut: 2)
+      timeout    — secondes max total (défaut: 120)
+    """
+    return await tot_loop(
+        mission=req.mission,
+        max_depth=req.max_depth,
+        n_branches=req.n_branches,
+        beam_width=req.beam_width,
+        timeout=req.timeout,
+    )
+
+
 @app.post("/raw")
 async def raw_llm(req: dict):
     result = await llm(
@@ -1553,8 +1908,10 @@ async def health():
         "react_enabled":      True,
         "critic_enabled":     True,
         "supervisor_enabled": True,
-        "react_max_steps_default":    15,
-        "supervisor_max_workers_default": 5,
+        "tot_enabled":        True,
+        "react_max_steps_default":         15,
+        "supervisor_max_workers_default":  5,
+        "tot_default_config": {"max_depth": 4, "n_branches": 3, "beam_width": 2},
     }
 
 
