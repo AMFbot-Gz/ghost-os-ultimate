@@ -16,7 +16,7 @@ Ghost OS Ultimate v1.0.0
 │   ├── Market (réputation agents)
 │   └── WebSocket HUD :9001
 │
-├── agent/                               ← 11 couches Python FastAPI
+├── agent/                               ← 12 couches Python FastAPI
 │   ├── queen.py          :8001  Orchestrateur + HITL + Telegram (Phase 12)
 │   ├── perception.py     :8002  Screenshots + scan système
 │   ├── brain.py          :8003  LLM routing (Claude → Kimi → Ollama)
@@ -27,7 +27,8 @@ Ghost OS Ultimate v1.0.0
 │   ├── planner.py        :8008  Planification HTN (Phase 10)
 │   ├── learner.py        :8009  Skill learning épisodes (Phase 11)
 │   ├── goals.py          :8010  Autonomous Goal Loop SQLite (Phase 13)
-│   └── pipeline.py       :8011  Skill Pipeline Composer (Phase 14)
+│   ├── pipeline.py       :8011  Skill Pipeline Composer (Phase 14)
+│   └── miner.py          :8012  Behavior Mining Engine (Phase 15)
 │
 ├── core/
 │   ├── consciousness/            ← NOUVEAU — conscience universelle

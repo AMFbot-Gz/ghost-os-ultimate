@@ -2717,6 +2717,73 @@ async def pipeline_health():
     return await _proxy_pipeline("GET", "/health")
 
 
+# ─── Miner proxy endpoints (/miner/*  →  miner.py :8012) ─────────────────────
+
+MINER_URL = "http://localhost:8012"
+
+
+async def _proxy_miner(method: str, path: str, body: Any = None, params: dict = None) -> dict:
+    try:
+        async with httpx.AsyncClient(timeout=120) as c:
+            if method == "GET":
+                r = await c.get(f"{MINER_URL}{path}", params=params or {})
+            elif method == "POST":
+                r = await c.post(f"{MINER_URL}{path}", json=body or {})
+            else:
+                return {"error": f"Méthode non supportée: {method}"}
+            r.raise_for_status()
+            return r.json()
+    except httpx.ConnectError:
+        return {"error": "Miner service inaccessible (port 8012)"}
+    except Exception as e:
+        return {"error": str(e)}
+
+
+@app.post("/miner/mine")
+async def miner_trigger():
+    return await _proxy_miner("POST", "/mine")
+
+
+@app.get("/miner/patterns")
+async def miner_patterns(domain: str = Query("all"), limit: int = Query(30)):
+    return await _proxy_miner("GET", "/patterns", params={"domain": domain, "limit": limit})
+
+
+@app.get("/miner/gaps")
+async def miner_gaps(limit: int = Query(20)):
+    return await _proxy_miner("GET", "/gaps", params={"limit": limit})
+
+
+@app.post("/miner/gaps/{pattern_id}/generate")
+async def miner_generate(pattern_id: str):
+    return await _proxy_miner("POST", f"/gaps/{pattern_id}/generate")
+
+
+@app.post("/miner/warmup")
+async def miner_warmup():
+    return await _proxy_miner("POST", "/warmup")
+
+
+@app.get("/miner/profile")
+async def miner_profile():
+    return await _proxy_miner("GET", "/profile")
+
+
+@app.get("/miner/signals")
+async def miner_signals(limit: int = Query(50)):
+    return await _proxy_miner("GET", "/signals", params={"limit": limit})
+
+
+@app.get("/miner/stats")
+async def miner_stats():
+    return await _proxy_miner("GET", "/stats")
+
+
+@app.get("/miner/health")
+async def miner_health():
+    return await _proxy_miner("GET", "/health")
+
+
 @app.post("/raw")
 async def raw_llm(req: dict):
     result = await llm(
