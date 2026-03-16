@@ -2,7 +2,7 @@
 
 ## Vision
 Agent autonome hybride 100% local — unification complète de LaRuche v5.0 + PICO-RUCHE.
-Node.js Queen + 7 couches Python FastAPI + Conscience universelle + 38+ skills.
+Node.js Queen + 8 couches Python FastAPI + Conscience universelle + 38+ skills.
 
 ## Architecture
 
@@ -16,14 +16,15 @@ Ghost OS Ultimate v1.0.0
 │   ├── Market (réputation agents)
 │   └── WebSocket HUD :9001
 │
-├── agent/                               ← 7 couches Python FastAPI
+├── agent/                               ← 8 couches Python FastAPI
 │   ├── queen.py          :8001  Orchestrateur + HITL + Telegram
 │   ├── perception.py     :8002  Screenshots + scan système
 │   ├── brain.py          :8003  LLM routing (Claude → Kimi → Ollama)
 │   ├── executor.py       :8004  Shell sandboxé + PyAutoGUI
 │   ├── evolution.py      :8005  Auto-amélioration skills
 │   ├── memory.py         :8006  Épisodes + world state
-│   └── mcp_bridge.py     :8007  Proxy Python → MCP Node.js
+│   ├── mcp_bridge.py     :8007  Proxy Python → MCP Node.js
+│   └── planner.py        :8008  Planification HTN (Phase 10)
 │
 ├── core/
 │   ├── consciousness/            ← NOUVEAU — conscience universelle

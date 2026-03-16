@@ -21,6 +21,7 @@ import BrainTracePage from "./components/pages/BrainTracePage.jsx";
 import MemoryPage     from "./components/pages/MemoryPage.jsx";
 import EvolutionPage     from "./components/pages/EvolutionPage.jsx";
 import ObservabilityPage from "./components/pages/ObservabilityPage.jsx";
+import PlannerPage       from "./components/pages/PlannerPage.jsx";
 
 const QUEEN_API = import.meta.env.VITE_QUEEN_API || "http://localhost:3000";
 const WS_URL    = import.meta.env.VITE_WS_URL    || "ws://localhost:9001";
@@ -93,7 +94,7 @@ function TopBar({ status, onRestart }) {
 }
 
 // Pages map
-const PAGES = { overview: Overview, missions: Missions, agents: Agents, skills: Skills, system: System, logs: Logs, settings: Settings, swarm: SwarmPage, goals: GoalsPage, pencil: PencilPage, config: ConfigPage, analytics: AnalyticsPage, "brain-trace": BrainTracePage, memory: MemoryPage, evolution: EvolutionPage, observability: ObservabilityPage };
+const PAGES = { overview: Overview, missions: Missions, agents: Agents, skills: Skills, system: System, logs: Logs, settings: Settings, swarm: SwarmPage, goals: GoalsPage, pencil: PencilPage, config: ConfigPage, analytics: AnalyticsPage, "brain-trace": BrainTracePage, memory: MemoryPage, evolution: EvolutionPage, observability: ObservabilityPage, planner: PlannerPage };
 
 function AppInner() {
   const [page, setPage] = useState("overview");

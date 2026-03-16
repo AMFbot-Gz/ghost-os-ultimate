@@ -10,6 +10,7 @@ const NAV_ITEMS = [
   { id: "brain-trace",  icon: "🧠", label: "Brain Trace",  badge: "NEW" },
   { id: "memory",       icon: "💾", label: "Mémoire" },
   { id: "evolution",    icon: "🧬", label: "Évolution" },
+  { id: "planner",      icon: "🗺️", label: "Planner",      badge: "NEW" },
   { id: "observability",icon: "🔭", label: "Observabilité" },
   { id: "agents",       icon: "🤖", label: "Agents" },
   { id: "skills",       icon: "🔧", label: "Skills" },

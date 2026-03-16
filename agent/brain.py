@@ -2447,6 +2447,71 @@ async def memory_reindex_proxy():
         return {"started": False, "error": str(e)}
 
 
+# ─── Planner proxy endpoints (/planner/*  →  planner.py :8008) ───────────────
+
+PLANNER_URL = "http://localhost:8008"
+
+
+async def _proxy_planner(method: str, path: str, body: Any = None, params: dict = None) -> dict:
+    """Helper pour proxier vers le service Planner :8008."""
+    try:
+        async with httpx.AsyncClient(timeout=120) as c:
+            if method == "GET":
+                r = await c.get(f"{PLANNER_URL}{path}", params=params or {})
+            elif method == "POST":
+                r = await c.post(f"{PLANNER_URL}{path}", json=body or {}, params=params or {})
+            elif method == "DELETE":
+                r = await c.delete(f"{PLANNER_URL}{path}", params=params or {})
+            else:
+                return {"error": f"Méthode non supportée: {method}"}
+            r.raise_for_status()
+            return r.json()
+    except httpx.ConnectError:
+        return {"error": "Planner service inaccessible (port 8008)"}
+    except Exception as e:
+        return {"error": str(e)}
+
+
+@app.post("/planner/plan")
+async def planner_create(req: dict):
+    return await _proxy_planner("POST", "/plan", req)
+
+
+@app.post("/planner/execute")
+async def planner_execute(req: dict):
+    return await _proxy_planner("POST", "/plan/execute", req)
+
+
+@app.get("/planner/plans")
+async def planner_list(limit: int = Query(20)):
+    return await _proxy_planner("GET", "/plans", params={"limit": limit})
+
+
+@app.get("/planner/plan/{plan_id}")
+async def planner_detail(plan_id: str):
+    return await _proxy_planner("GET", f"/plan/{plan_id}")
+
+
+@app.get("/planner/plan/{plan_id}/status")
+async def planner_status(plan_id: str):
+    return await _proxy_planner("GET", f"/plan/{plan_id}/status")
+
+
+@app.post("/planner/replan")
+async def planner_replan(req: dict):
+    return await _proxy_planner("POST", "/plan/replan", req)
+
+
+@app.post("/planner/search")
+async def planner_search(req: dict):
+    return await _proxy_planner("POST", "/plan/search", req)
+
+
+@app.get("/planner/health")
+async def planner_health():
+    return await _proxy_planner("GET", "/health")
+
+
 @app.post("/raw")
 async def raw_llm(req: dict):
     result = await llm(
