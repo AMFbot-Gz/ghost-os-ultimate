@@ -3040,6 +3040,54 @@ async def consciousness_health():
     return await _proxy_consciousness("GET", "/health")
 
 
+# ─── Self-Optimization Engine proxy (:8017) ───────────────────────────────────
+
+_OPTIMIZER_URL = "http://localhost:8017"
+
+
+async def _proxy_optimizer(method: str, path: str, body: dict | None = None, params: dict | None = None):
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            url = f"{_OPTIMIZER_URL}{path}"
+            if method == "GET":
+                r = await client.get(url, params=params)
+            else:
+                r = await client.post(url, json=body)
+            return r.json()
+    except Exception as e:
+        return {"error": str(e), "layer": "optimizer", "path": path}
+
+
+@app.get("/optimizer/status")
+async def optimizer_status():
+    return await _proxy_optimizer("GET", "/status")
+
+
+@app.get("/optimizer/stats")
+async def optimizer_stats():
+    return await _proxy_optimizer("GET", "/stats")
+
+
+@app.get("/optimizer/cycles")
+async def optimizer_cycles(limit: int = Query(20)):
+    return await _proxy_optimizer("GET", "/cycles", params={"limit": limit})
+
+
+@app.get("/optimizer/actions")
+async def optimizer_actions(limit: int = Query(50)):
+    return await _proxy_optimizer("GET", "/actions", params={"limit": limit})
+
+
+@app.post("/optimizer/optimize")
+async def optimizer_trigger():
+    return await _proxy_optimizer("POST", "/optimize", {})
+
+
+@app.get("/optimizer/health")
+async def optimizer_health():
+    return await _proxy_optimizer("GET", "/health")
+
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=CONFIG["ports"]["brain"])

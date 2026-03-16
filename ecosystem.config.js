@@ -108,6 +108,7 @@ export default {
     { name: 'ghost-validator',   script: 'agent/validator.py',          interpreter: 'python3', watch: false, autorestart: true, cwd: './', max_memory_restart: '100M', log_file: 'agent/logs/validator.log',   error_file: 'agent/logs/validator-error.log' },
     { name: 'ghost-computer-use',script: 'agent/computer_use.py',       interpreter: 'python3', watch: false, autorestart: true, cwd: './', max_memory_restart: '200M', log_file: 'agent/logs/computer_use.log',error_file: 'agent/logs/computer_use-error.log' },
     { name: 'ghost-consciousness',script: 'agent/consciousness_bridge.py',interpreter: 'python3',watch: false, autorestart: true, cwd: './', max_memory_restart: '150M', log_file: 'agent/logs/consciousness.log',error_file: 'agent/logs/consciousness-error.log' },
+    { name: 'ghost-optimizer',   script: 'agent/optimizer.py',           interpreter: 'python3', watch: false, autorestart: true, cwd: './', max_memory_restart: '150M', log_file: 'agent/logs/optimizer.log',    error_file: 'agent/logs/optimizer-error.log' },
     // Queen orchestrateur (démarre en dernier)
     { name: 'ghost-queen-py',    script: 'agent/queen.py',       interpreter: 'python3', watch: false, autorestart: true, cwd: './', max_memory_restart: '300M', log_file: 'agent/logs/queen_py.log',    error_file: 'agent/logs/queen_py-error.log' },
   ],

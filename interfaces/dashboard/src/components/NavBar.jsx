@@ -18,6 +18,7 @@ const NAV_ITEMS = [
   { id: "validator",    icon: "🔬", label: "Validator",       badge: "NEW" },
   { id: "computer-use",   icon: "🖥️", label: "Computer Use",    badge: "NEW" },
   { id: "consciousness",  icon: "🧠", label: "Conscience",       badge: "NEW" },
+  { id: "optimizer",      icon: "⚡", label: "Optimizer",         badge: "NEW" },
   { id: "observability",  icon: "🔭", label: "Observabilité" },
   { id: "agents",       icon: "🤖", label: "Agents" },
   { id: "skills",       icon: "🔧", label: "Skills" },

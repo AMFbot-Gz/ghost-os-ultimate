@@ -42,6 +42,7 @@ declare -A SERVICES=(
   ["🔬 Validator :8014"]="http://localhost:8014/health"
   ["🖥️  ComputerUse :8015"]="http://localhost:8015/health"
   ["🧠 Consciousness :8016"]="http://localhost:8016/health"
+  ["⚡ Optimizer :8017"]="http://localhost:8017/health"
   ["🟠 Ollama :11434"]="http://localhost:11434/api/tags"
 )
 
@@ -64,6 +65,7 @@ ORDERED_KEYS=(
   "🔬 Validator :8014"
   "🖥️  ComputerUse :8015"
   "🧠 Consciousness :8016"
+  "⚡ Optimizer :8017"
   "🟠 Ollama :11434"
 )
 

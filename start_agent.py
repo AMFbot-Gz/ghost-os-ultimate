@@ -152,9 +152,17 @@ LAYERS = [
         "name": "ConsciousnessBridge",
         "file": "agent.consciousness_bridge",
         "port": 8016,
-        "desc": "NeuralEventBus ↔ 15 couches Python · signaux phéromone · WS",
+        "desc": "NeuralEventBus ↔ 17 couches Python · signaux phéromone · WS",
         "emoji": "🧠",
         "depends_on": ["Brain", "Memory", "Queen"],
+    },
+    {
+        "name": "Optimizer",
+        "file": "agent.optimizer",
+        "port": 8017,
+        "desc": "Self-Optimization Engine — Miner→Evolution→Validator",
+        "emoji": "⚡",
+        "depends_on": ["Miner", "Evolution", "Validator"],
     },
     {
         "name": "Queen",
@@ -438,7 +446,7 @@ def main():
     # 4. Tableau de bord ASCII
     print()
     print(bar)
-    print("🐝 Ghost OS Ultimate v1.0.0 — 16 couches Python — Tableau de bord")
+    print("🐝 Ghost OS Ultimate v1.0.0 — 17 couches Python — Tableau de bord")
     print(bar)
 
     display_order = [
@@ -456,7 +464,8 @@ def main():
         ("SwarmRouter",          8013, "5 abeilles spécialisées"),
         ("Validator",            8014, "5 checks + deploy/quarantine"),
         ("ComputerUse",          8015, "GUI See→Plan→Act→Verify"),
-        ("ConsciousnessBridge",  8016, "NeuralEventBus ↔ 15 couches Python"),
+        ("ConsciousnessBridge",  8016, "NeuralEventBus ↔ 17 couches Python"),
+        ("Optimizer",            8017, "Self-Optimization Engine"),
         ("Queen",                8001, "boucle vitale 30s"),
     ]
 
@@ -470,7 +479,7 @@ def main():
     tg = "configuré" if telegram_configured() else "non configuré"
     all_ok = all(s.get("ok") for s in layer_status.values())
     hive_status = "Essaim actif" if all_ok else "Essaim partiel — certaines couches KO"
-    print(f"🐝 {hive_status}  |  Telegram: [{tg}]  |  v1.0.0 — 16 couches Python")
+    print(f"🐝 {hive_status}  |  Telegram: [{tg}]  |  v1.0.0 — 17 couches Python")
     print(bar)
 
     total_startup = sum(s.get("latency", 0) for s in layer_status.values())

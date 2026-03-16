@@ -48,7 +48,7 @@ SIGNAL_POLL_MS     = 500      # lecture signals.jsonl (500ms)
 MAX_EVENTS         = 500      # historique bus en mémoire
 MAX_SIGNALS        = 200      # signaux phéromone en mémoire
 
-# 15 couches Python avec leurs ports
+# 16 couches Python avec leurs ports
 PYTHON_LAYERS: list[dict] = [
     {"name": "Queen",       "port": 8001, "emoji": "👑", "desc": "Orchestrateur + HITL + Telegram"},
     {"name": "Perception",  "port": 8002, "emoji": "👁️",  "desc": "Screenshots + scan système"},
@@ -65,6 +65,7 @@ PYTHON_LAYERS: list[dict] = [
     {"name": "SwarmRouter", "port": 8013, "emoji": "🐝", "desc": "Bee Specialization — 5 abeilles"},
     {"name": "Validator",   "port": 8014, "emoji": "🔬", "desc": "Skill Validator Loop"},
     {"name": "ComputerUse", "port": 8015, "emoji": "🖥️",  "desc": "Computer Use Master"},
+    {"name": "Optimizer",   "port": 8017, "emoji": "⚡", "desc": "Self-Optimization Engine — Miner→Evolution→Validator"},
 ]
 
 # ─── État de conscience partagé ────────────────────────────────────────────────
@@ -276,7 +277,7 @@ async def _heartbeat_loop():
 async def lifespan(app: FastAPI):
     print("[ConsciousnessBridge] 🧠 Consciousness Bridge actif — port 8016")
     print(f"  Signals file : {SIGNALS_FILE}")
-    print(f"  Layers       : {len(PYTHON_LAYERS)} couches Python (8001–8015)")
+    print(f"  Layers       : {len(PYTHON_LAYERS)} couches Python (8001–8017)")
     print(f"  Health poll  : toutes les {HEALTH_INTERVAL_S}s")
     print(f"  Signal poll  : toutes les {SIGNAL_POLL_MS}ms")
 

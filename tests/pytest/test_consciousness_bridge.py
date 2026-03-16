@@ -139,13 +139,15 @@ class TestConsciousnessBridgeLayerConfigLogic:
             f"SIGNAL_POLL_MS = {match.group(1)}, attendu 500"
         )
 
-    def test_python_layers_has_15_entries(self):
-        """PYTHON_LAYERS doit contenir 15 couches (ports 8001-8015)."""
+    def test_python_layers_has_16_entries(self):
+        """PYTHON_LAYERS doit contenir 16 couches (ports 8001-8017)."""
         # Compte les ports via entrées dict {"port": XXXX}
         ports_found = re.findall(r'"port":\s*(\d{4})', self.content)
-        layer_ports_unique = set(p for p in ports_found if 8001 <= int(p) <= 8015)
-        assert len(layer_ports_unique) == 15, (
-            f"Attendu 15 ports uniques 8001-8015, trouvé {len(layer_ports_unique)}: {sorted(layer_ports_unique)}"
+        # Ports attendus : 8001-8015 + 8017 (Optimizer, Phase 21)
+        expected = {str(p) for p in range(8001, 8016)} | {"8017"}
+        layer_ports_found = set(p for p in ports_found if p in expected)
+        assert len(layer_ports_found) == 16, (
+            f"Attendu 16 ports dans PYTHON_LAYERS, trouvé {len(layer_ports_found)}: {sorted(layer_ports_found)}"
         )
 
     def test_python_layers_is_list(self):
@@ -158,9 +160,9 @@ class TestConsciousnessBridgeLayerConfigLogic:
         """Le port 8016 (propre à consciousness_bridge) doit être référencé."""
         assert '8016' in self.content
 
-    @pytest.mark.parametrize("port", list(range(8001, 8016)))
+    @pytest.mark.parametrize("port", list(range(8001, 8016)) + [8017])
     def test_each_layer_port_present(self, port):
-        """Chaque port de couche Python (8001-8015) doit apparaître dans le fichier."""
+        """Chaque port de couche Python (8001-8015 + 8017) doit apparaître dans le fichier."""
         assert str(port) in self.content, (
             f"Port {port} manquant dans consciousness_bridge.py"
         )

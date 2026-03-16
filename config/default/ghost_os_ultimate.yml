@@ -54,6 +54,7 @@ ports:
   validator: 8014
   computer_use: 8015
   consciousness_bridge: 8016
+  optimizer: 8017
   # Node.js + Frontend
   node_queen: 3000
   hud: 9001
@@ -225,6 +226,14 @@ computer_use:
   vision_model: "moondream:latest"    # Modèle vision pour screenshot+describe
   failsafe: true                      # pyautogui FAILSAFE coin haut-gauche
 
+# ─── Self-Optimization Engine (Phase 21) ─────────────────────────────────────
+optimizer:
+  loop_interval_s: 1800              # Cycle toutes les 30 minutes
+  top_gaps: 5                        # Nombre de gaps traités par cycle
+  gap_min_score: 1.5                 # Seuil minimum gap_score pour action
+  deploy_tiers: [gold, silver]       # Tiers auto-déployés après validation
+  startup_delay_s: 60               # Délai avant le premier cycle
+
 # ─── Production Shell (Phase 20) ─────────────────────────────────────────────
 production:
   pm2_ecosystem: "ecosystem.config.js"
@@ -234,4 +243,4 @@ production:
   test_command_pytest: "python3 -m pytest tests/pytest/ -v --tb=short"
   test_command_jest: "node --experimental-vm-modules node_modules/.bin/jest"
   start_command: "python3 start_agent.py"
-  total_python_layers: 16             # Phases 1-19 complètes
+  total_python_layers: 17             # Phases 1-21 complètes

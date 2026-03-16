@@ -31,6 +31,7 @@ services:
       - "8014:8014"    # Validator (Skill Validator Loop — Phase 17)
       - "8015:8015"    # ComputerUse (GUI Sessions — Phase 18)
       - "8016:8016"    # ConsciousnessBridge (NeuralEventBus — Phase 19)
+      - "8017:8017"    # Optimizer (Self-Optimization Engine — Phase 21)
       - "9001:9001"    # HUD WebSocket
     volumes:
       - ghost_data:/app/.laruche
@@ -54,6 +55,7 @@ services:
       - VALIDATOR_URL=http://localhost:8014
       - SWARM_URL=http://localhost:8013
       - CONSCIOUSNESS_BRIDGE_URL=http://localhost:8016
+      - OPTIMIZER_URL=http://localhost:8017
     extra_hosts:
       - "host.docker.internal:host-gateway"
     healthcheck:
