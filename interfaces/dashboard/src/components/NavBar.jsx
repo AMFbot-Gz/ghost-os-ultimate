@@ -4,18 +4,19 @@
 import React from "react";
 
 const NAV_ITEMS = [
-  { id: "overview",  icon: "🏠", label: "Vue d'ensemble" },
-  { id: "analytics", icon: "📈", label: "Analytics" },
-  { id: "missions",  icon: "🎯", label: "Missions" },
-  { id: "agents",    icon: "🤖", label: "Agents" },
-  { id: "skills",    icon: "🔧", label: "Skills" },
-  { id: "swarm",     icon: "🌐", label: "Swarm" },
-  { id: "goals",     icon: "🏆", label: "Objectifs" },
-  { id: "system",    icon: "📊", label: "Système" },
-  { id: "logs",      icon: "📜", label: "Logs" },
-  { id: "settings",  icon: "⚙️",  label: "Réglages" },
-  { id: "config",    icon: "🔧", label: "Config" },
-  { id: "pencil",    icon: "✏️",  label: "Pencil" },
+  { id: "overview",     icon: "🏠", label: "Vue d'ensemble" },
+  { id: "analytics",    icon: "📈", label: "Analytics" },
+  { id: "missions",     icon: "🎯", label: "Missions" },
+  { id: "brain-trace",  icon: "🧠", label: "Brain Trace",  badge: "NEW" },
+  { id: "agents",       icon: "🤖", label: "Agents" },
+  { id: "skills",       icon: "🔧", label: "Skills" },
+  { id: "swarm",        icon: "🌐", label: "Swarm" },
+  { id: "goals",        icon: "🏆", label: "Objectifs" },
+  { id: "system",       icon: "📊", label: "Système" },
+  { id: "logs",         icon: "📜", label: "Logs" },
+  { id: "settings",     icon: "⚙️",  label: "Réglages" },
+  { id: "config",       icon: "🔧", label: "Config" },
+  { id: "pencil",       icon: "✏️",  label: "Pencil" },
 ];
 
 export default function NavBar({ activePage, onNavigate, missionCount = 0 }) {
@@ -61,6 +62,13 @@ export default function NavBar({ activePage, onNavigate, missionCount = 0 }) {
                 background: "var(--primary)", color: "white",
                 borderRadius: 10, padding: "1px 7px", fontSize: 11, fontWeight: 600,
               }}>{missionCount}</span>
+            )}
+            {item.badge && (
+              <span style={{
+                background: "var(--violet)", color: "white",
+                borderRadius: 10, padding: "1px 6px", fontSize: 9, fontWeight: 700,
+                letterSpacing: "0.04em",
+              }}>{item.badge}</span>
             )}
           </button>
         );

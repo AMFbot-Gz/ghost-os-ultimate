@@ -12,9 +12,11 @@ import uuid
 import subprocess
 from datetime import datetime
 from pathlib import Path
-from fastapi import FastAPI
+from fastapi import FastAPI, Query
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
-from typing import List, Optional, Any
+from typing import List, Optional, Any, Callable
 import yaml
 from dotenv import load_dotenv
 load_dotenv()
@@ -25,6 +27,14 @@ with open(ROOT / "agent_config.yml") as f:
     CONFIG = yaml.safe_load(f)
 
 app = FastAPI(title="PICO-RUCHE Brain", version="1.0.0")
+
+# CORS — autorise le dashboard Vite (port 3001) et toute origine locale
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:3001", "http://localhost:5173", "http://localhost:3000"],
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 OLLAMA_URL        = CONFIG["ollama"]["base_url"]
 MLX_URL           = CONFIG["mlx"]["server_url"]
@@ -876,11 +886,21 @@ async def _execute_rollback(rollback_action: str, timeout: int = 15) -> dict:
         return {"ok": False, "output": str(e)[:200]}
 
 
+async def _emit(on_event: Optional[Callable], event: dict) -> None:
+    """Émet un événement SSE si le callback est défini. Ignore les erreurs silencieusement."""
+    if on_event:
+        try:
+            await on_event(event)
+        except Exception:
+            pass
+
+
 async def react_loop(
     mission: str,
     max_steps: int = 15,
     mission_type: str = "general",
     timeout_per_step: int = 60,
+    on_event: Optional[Callable] = None,
 ) -> dict:
     """
     Boucle ReAct complète : Reason → Act → Observe → repeat.
@@ -914,10 +934,12 @@ async def react_loop(
     messages: List[dict] = [{"role": "user", "content": f"Mission: {mission}"}]
 
     print(f"[Brain/ReAct] 🚀 Démarrage mission={mission_id} max_steps={max_steps}")
+    await _emit(on_event, {"type": "start", "mission_id": mission_id, "mission": mission, "max_steps": max_steps})
 
     for step_num in range(1, max_steps + 1):
         step_start = time.time()
         print(f"[Brain/ReAct] ── Étape {step_num}/{max_steps}")
+        await _emit(on_event, {"type": "step_start", "step": step_num, "max_steps": max_steps})
 
         # Compression si le contexte grossit trop
         total_text = " ".join(m.get("content", "") for m in messages)
@@ -950,6 +972,8 @@ async def react_loop(
 
         print(f"[Brain/ReAct]   Thought: {thought[:80]}")
         print(f"[Brain/ReAct]   Action:  {action} | Input: {action_input[:80]}")
+        await _emit(on_event, {"type": "thought", "step": step_num, "thought": thought,
+                               "action": action, "action_input": action_input})
 
         # Anti-boucle : même action_input 3 fois → forcer done
         if action_input == last_action_input:
@@ -980,6 +1004,9 @@ async def react_loop(
                 exec_success=success,
             )
             print(f"[Critic] verdict={critic['verdict']} conf={critic['confidence']:.2f} | {critic['reason'][:60]}")
+            await _emit(on_event, {"type": "critic", "step": step_num, "verdict": critic["verdict"],
+                                   "reason": critic["reason"], "confidence": critic["confidence"],
+                                   "rollback_needed": critic.get("rollback_needed", False)})
 
             # ── Auto-rollback si verdict=abort ─────────────────────────────
             if critic["verdict"] == "abort" and critic.get("rollback_needed") and critic.get("rollback_action"):
@@ -1015,13 +1042,19 @@ async def react_loop(
                 "output": rollback_result["output"][:200],
             }
         steps_trace.append(step_record)
+        await _emit(on_event, {"type": "observation", "step": step_num, "observation": observation,
+                               "success": success, "duration_ms": step_ms})
+        if rollback_result:
+            await _emit(on_event, {"type": "rollback", "step": step_num,
+                                   "rollback_action": critic.get("rollback_action", ""),
+                                   "ok": rollback_result["ok"], "output": rollback_result["output"][:200]})
 
         print(f"[Brain/ReAct]   Obs ({step_ms}ms): {observation[:100]}")
 
         # ── Fin si done ────────────────────────────────────────────────────
         if action == "done":
             print(f"[Brain/ReAct] ✅ Mission terminée en {step_num} étape(s)")
-            return {
+            final = {
                 "mission_id":   mission_id,
                 "status":       "success",
                 "steps":        steps_trace,
@@ -1032,6 +1065,8 @@ async def react_loop(
                 "model":        result["model"],
                 "duration_ms":  int((time.time() - started) * 1000),
             }
+            await _emit(on_event, {"type": "done", **{k: v for k, v in final.items() if k != "steps"}})
+            return final
 
         # ── Message contexte pour le prochain tour ─────────────────────────
         messages.append({"role": "assistant", "content": raw})
@@ -1449,6 +1484,7 @@ async def tot_loop(
     n_branches: int = 3,
     beam_width: int = 2,
     timeout:    int = 120,
+    on_event:   Optional[Callable] = None,
 ) -> dict:
     """
     Tree of Thoughts BFS avec beam search.
@@ -1464,6 +1500,8 @@ async def tot_loop(
     started    = time.time()
     mission_id = uuid.uuid4().hex[:8]
     print(f"[Brain/ToT] 🌳 Start mission={mission_id} depth={max_depth} branches={n_branches} beam={beam_width}")
+    await _emit(on_event, {"type": "start", "mission_id": mission_id, "mission": mission,
+                           "max_depth": max_depth, "n_branches": n_branches, "beam_width": beam_width})
 
     # Beam courant : liste de noeuds {"path": [...], "score": float, "is_solution": bool, ...}
     beam: List[dict] = [{"path": [], "score": 1.0, "feasibility": 1.0, "relevance": 1.0,
@@ -1479,6 +1517,7 @@ async def tot_loop(
             break
 
         print(f"[Brain/ToT] ── Depth {depth}/{max_depth}  beam_size={len(beam)}")
+        await _emit(on_event, {"type": "depth_start", "depth": depth, "max_depth": max_depth, "beam_size": len(beam)})
 
         # ── Expansion parallèle ────────────────────────────────────────────
         expand_results = await asyncio.gather(
@@ -1526,16 +1565,29 @@ async def tot_loop(
             flag = "✅" if node["is_solution"] else "  "
             print(f"[Brain/ToT]   {flag} score={node['score']:.2f} → {thought[:70]}…")
 
+            await _emit(on_event, {"type": "node_eval", "depth": depth,
+                                   "thought": thought, "score": node["score"],
+                                   "feasibility": node["feasibility"], "relevance": node["relevance"],
+                                   "safety": node["safety"], "reason": node["reason"],
+                                   "is_solution": node["is_solution"],
+                                   "solution_summary": node.get("solution_summary")})
             if node["is_solution"] and node["score"] > (best_solution["score"] if best_solution else 0.0):
                 best_solution = node
 
         if best_solution:
             print(f"[Brain/ToT] 🎯 Solution trouvée à depth={depth} score={best_solution['score']:.2f}")
+            await _emit(on_event, {"type": "solution_found", "depth": depth,
+                                   "score": best_solution["score"],
+                                   "path": best_solution["path"],
+                                   "solution_summary": best_solution.get("solution_summary")})
             break
 
         # ── Beam pruning ───────────────────────────────────────────────────
         scored.sort(key=lambda n: n["score"], reverse=True)
         beam = scored[:beam_width]
+        await _emit(on_event, {"type": "beam_prune", "depth": depth,
+                               "kept": [n["path"][-1] if n["path"] else "" for n in beam],
+                               "scores": [round(n["score"], 3) for n in beam]})
         if not beam:
             print(f"[Brain/ToT] Beam vide à depth={depth} — arrêt")
             break
@@ -1566,6 +1618,7 @@ async def tot_loop(
         .replace("{optimal_path}", path_text)
         .replace("{best_score}", f"{best_solution['score']:.2f}")
     )
+    await _emit(on_event, {"type": "generating_plan"})
     try:
         plan_result    = await llm("strategist",
                                    [{"role": "user", "content": "Produis le plan d'exécution."}],
@@ -1578,7 +1631,8 @@ async def tot_loop(
         provider       = "unknown"
         model_used     = "unknown"
 
-    return {
+    await _emit(on_event, {"type": "plan_ready", "execution_plan": execution_plan})
+    result_dict = {
         "mission_id":       mission_id,
         "status":           status,
         "goal":             mission,
@@ -1601,6 +1655,12 @@ async def tot_loop(
         "model":       model_used,
         "duration_ms": int((time.time() - started) * 1000),
     }
+    await _emit(on_event, {"type": "done", "mission_id": mission_id, "status": status,
+                           "best_score": result_dict["best_score"],
+                           "path_depth": result_dict["path_depth"],
+                           "total_nodes": len(all_nodes),
+                           "duration_ms": result_dict["duration_ms"]})
+    return result_dict
 
 
 # ─── Models ───────────────────────────────────────────────────────────────
@@ -1874,6 +1934,92 @@ async def tree_of_thoughts(req: ToTRequest):
         beam_width=req.beam_width,
         timeout=req.timeout,
     )
+
+
+# ─── SSE Streaming endpoints ──────────────────────────────────────────────────
+
+def _sse_headers():
+    return {"Cache-Control": "no-cache", "X-Accel-Buffering": "no", "Connection": "keep-alive"}
+
+
+@app.get("/react/stream")
+async def react_stream(
+    mission:          str = Query(...),
+    max_steps:        int = Query(15),
+    mission_type:     str = Query("general"),
+    timeout_per_step: int = Query(60),
+):
+    """SSE — stream la boucle ReAct étape par étape en temps réel.
+
+    Événements émis : start | step_start | thought | observation | critic | rollback | done | error
+    Consomme via EventSource('GET /react/stream?mission=...') dans le dashboard.
+    """
+    queue: asyncio.Queue = asyncio.Queue()
+
+    async def on_event(event: dict):
+        await queue.put(event)
+
+    async def generate():
+        task = asyncio.create_task(
+            react_loop(mission, max_steps, mission_type, timeout_per_step, on_event=on_event)
+        )
+        while True:
+            try:
+                event = await asyncio.wait_for(queue.get(), timeout=2.0)
+                yield f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
+                if event.get("type") in ("done", "error"):
+                    break
+            except asyncio.TimeoutError:
+                if task.done():
+                    break
+                yield ": keepalive\n\n"
+        try:
+            await task
+        except Exception:
+            pass
+
+    return StreamingResponse(generate(), media_type="text/event-stream", headers=_sse_headers())
+
+
+@app.get("/tot/stream")
+async def tot_stream(
+    mission:    str = Query(...),
+    max_depth:  int = Query(4),
+    n_branches: int = Query(3),
+    beam_width: int = Query(2),
+    timeout:    int = Query(120),
+):
+    """SSE — stream le Tree of Thoughts noeud par noeud en temps réel.
+
+    Événements émis : start | depth_start | node_eval | beam_prune | solution_found |
+                      generating_plan | plan_ready | done
+    Consomme via EventSource('GET /tot/stream?mission=...') dans le dashboard.
+    """
+    queue: asyncio.Queue = asyncio.Queue()
+
+    async def on_event(event: dict):
+        await queue.put(event)
+
+    async def generate():
+        task = asyncio.create_task(
+            tot_loop(mission, max_depth, n_branches, beam_width, timeout, on_event=on_event)
+        )
+        while True:
+            try:
+                event = await asyncio.wait_for(queue.get(), timeout=2.0)
+                yield f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
+                if event.get("type") in ("done", "error"):
+                    break
+            except asyncio.TimeoutError:
+                if task.done():
+                    break
+                yield ": keepalive\n\n"
+        try:
+            await task
+        except Exception:
+            pass
+
+    return StreamingResponse(generate(), media_type="text/event-stream", headers=_sse_headers())
 
 
 @app.post("/raw")

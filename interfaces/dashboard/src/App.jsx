@@ -5,18 +5,19 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { ToastProvider, useToast } from "./components/Toast.jsx";
 import NavBar from "./components/NavBar.jsx";
-import Overview  from "./components/pages/Overview.jsx";
-import Missions  from "./components/pages/Missions.jsx";
-import Agents    from "./components/pages/Agents.jsx";
-import Skills    from "./components/pages/Skills.jsx";
-import System    from "./components/pages/System.jsx";
-import Logs      from "./components/pages/Logs.jsx";
-import Settings  from "./components/pages/Settings.jsx";
-import SwarmPage from "./components/pages/SwarmPage.jsx";
-import GoalsPage from "./components/pages/GoalsPage.jsx";
+import Overview   from "./components/pages/Overview.jsx";
+import Missions   from "./components/pages/Missions.jsx";
+import Agents     from "./components/pages/Agents.jsx";
+import Skills     from "./components/pages/Skills.jsx";
+import System     from "./components/pages/System.jsx";
+import Logs       from "./components/pages/Logs.jsx";
+import Settings   from "./components/pages/Settings.jsx";
+import SwarmPage  from "./components/pages/SwarmPage.jsx";
+import GoalsPage  from "./components/pages/GoalsPage.jsx";
 import PencilPage from "./components/pages/PencilPage.jsx";
 import ConfigPage from "./components/pages/ConfigPage.jsx";
-import AnalyticsPage from "./components/pages/AnalyticsPage.jsx";
+import AnalyticsPage  from "./components/pages/AnalyticsPage.jsx";
+import BrainTracePage from "./components/pages/BrainTracePage.jsx";
 
 const QUEEN_API = import.meta.env.VITE_QUEEN_API || "http://localhost:3000";
 const WS_URL    = import.meta.env.VITE_WS_URL    || "ws://localhost:9001";
@@ -89,7 +90,7 @@ function TopBar({ status, onRestart }) {
 }
 
 // Pages map
-const PAGES = { overview: Overview, missions: Missions, agents: Agents, skills: Skills, system: System, logs: Logs, settings: Settings, swarm: SwarmPage, goals: GoalsPage, pencil: PencilPage, config: ConfigPage, analytics: AnalyticsPage };
+const PAGES = { overview: Overview, missions: Missions, agents: Agents, skills: Skills, system: System, logs: Logs, settings: Settings, swarm: SwarmPage, goals: GoalsPage, pencil: PencilPage, config: ConfigPage, analytics: AnalyticsPage, "brain-trace": BrainTracePage };
 
 function AppInner() {
   const [page, setPage] = useState("overview");

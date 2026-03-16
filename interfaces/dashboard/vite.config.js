@@ -27,6 +27,11 @@ export default defineConfig({
         ws: true,
         changeOrigin: true,
       },
+      "/brain": {
+        target: "http://localhost:8003",
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/brain/, ""),
+      },
     },
   },
 });
