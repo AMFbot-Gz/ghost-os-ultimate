@@ -2565,6 +2565,83 @@ async def learner_health():
     return await _proxy_learner("GET", "/health")
 
 
+# ─── Goals proxy endpoints (/goals/*  →  goals.py :8010) ─────────────────────
+
+GOALS_URL = "http://localhost:8010"
+
+
+async def _proxy_goals(method: str, path: str, body: Any = None, params: dict = None) -> dict:
+    """Helper pour proxier vers le service Goals :8010."""
+    try:
+        async with httpx.AsyncClient(timeout=60) as c:
+            if method == "GET":
+                r = await c.get(f"{GOALS_URL}{path}", params=params or {})
+            elif method == "POST":
+                r = await c.post(f"{GOALS_URL}{path}", json=body or {}, params=params or {})
+            elif method == "DELETE":
+                r = await c.delete(f"{GOALS_URL}{path}")
+            elif method == "PATCH":
+                r = await c.patch(f"{GOALS_URL}{path}", json=body or {})
+            else:
+                return {"error": f"Méthode non supportée: {method}"}
+            r.raise_for_status()
+            return r.json()
+    except httpx.ConnectError:
+        return {"error": "Goals service inaccessible (port 8010)"}
+    except Exception as e:
+        return {"error": str(e)}
+
+
+@app.post("/goals")
+async def goals_create(req: dict):
+    return await _proxy_goals("POST", "/goals", req)
+
+
+@app.get("/goals")
+async def goals_list(status: str = Query("all"), limit: int = Query(100)):
+    return await _proxy_goals("GET", "/goals", params={"status": status, "limit": limit})
+
+
+@app.get("/goals/schedule")
+async def goals_schedule():
+    return await _proxy_goals("GET", "/goals/schedule")
+
+
+@app.get("/goals/stats")
+async def goals_stats():
+    return await _proxy_goals("GET", "/goals/stats")
+
+
+@app.get("/goals/{goal_id}")
+async def goals_detail(goal_id: str):
+    return await _proxy_goals("GET", f"/goals/{goal_id}")
+
+
+@app.delete("/goals/{goal_id}")
+async def goals_delete(goal_id: str):
+    return await _proxy_goals("DELETE", f"/goals/{goal_id}")
+
+
+@app.patch("/goals/{goal_id}/status")
+async def goals_status(goal_id: str, req: dict):
+    return await _proxy_goals("PATCH", f"/goals/{goal_id}/status", req)
+
+
+@app.post("/goals/{goal_id}/execute")
+async def goals_execute(goal_id: str):
+    return await _proxy_goals("POST", f"/goals/{goal_id}/execute")
+
+
+@app.post("/goals/{goal_id}/plan")
+async def goals_plan(goal_id: str):
+    return await _proxy_goals("POST", f"/goals/{goal_id}/plan")
+
+
+@app.get("/goals/health")
+async def goals_health():
+    return await _proxy_goals("GET", "/health")
+
+
 @app.post("/raw")
 async def raw_llm(req: dict):
     result = await llm(

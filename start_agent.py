@@ -101,6 +101,14 @@ LAYERS = [
         "depends_on": ["Brain", "Memory", "Evolution"],
     },
     {
+        "name": "Goals",
+        "file": "agent.goals",
+        "port": 8010,
+        "desc": "objectifs autonomes SQLite",
+        "emoji": "🏆",
+        "depends_on": ["Brain", "Planner", "Queen"],
+    },
+    {
         "name": "Queen",
         "file": "agent.queen",
         "port": 8001,
@@ -296,7 +304,7 @@ def main():
     bar = "━" * width
 
     print()
-    print("🐝 PICO-RUCHE v5.0.0 — 9 couches Python — Démarrage")
+    print("🐝 PICO-RUCHE v5.0.0 — 10 couches Python — Démarrage")
     print(bar)
 
     # FIX 4 : vérifier les PID stales avant tout démarrage
@@ -382,7 +390,7 @@ def main():
     # 4. Tableau de bord ASCII
     print()
     print(bar)
-    print("🐝 PICO-RUCHE v5.0.0 — 9 couches Python — Tableau de bord")
+    print("🐝 PICO-RUCHE v5.0.0 — 10 couches Python — Tableau de bord")
     print(bar)
 
     display_order = [
@@ -394,6 +402,7 @@ def main():
         ("MCP Bridge", 8007, "proxy MCP Node.js"),
         ("Planner",    8008, "planification HTN"),
         ("Learner",    8009, "skill learning épisodes"),
+        ("Goals",      8010, "objectifs autonomes SQLite"),
         ("Queen",      8001, "boucle vitale 30s"),
     ]
 
@@ -407,7 +416,7 @@ def main():
     tg = "configuré" if telegram_configured() else "non configuré"
     all_ok = all(s.get("ok") for s in layer_status.values())
     hive_status = "Essaim actif" if all_ok else "Essaim partiel — certaines couches KO"
-    print(f"🐝 {hive_status}  |  Telegram: [{tg}]  |  v5.0.0 — 9 couches Python")
+    print(f"🐝 {hive_status}  |  Telegram: [{tg}]  |  v5.0.0 — 10 couches Python")
     print(bar)
 
     total_startup = sum(s.get("latency", 0) for s in layer_status.values())
