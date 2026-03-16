@@ -16,7 +16,7 @@ Ghost OS Ultimate v1.0.0
 │   ├── Market (réputation agents)
 │   └── WebSocket HUD :9001
 │
-├── agent/                               ← 14 couches Python FastAPI
+├── agent/                               ← 15 couches Python FastAPI
 │   ├── queen.py          :8001  Orchestrateur + HITL + Telegram (Phase 12)
 │   ├── perception.py     :8002  Screenshots + scan système
 │   ├── brain.py          :8003  LLM routing (Claude → Kimi → Ollama)
@@ -30,7 +30,8 @@ Ghost OS Ultimate v1.0.0
 │   ├── pipeline.py       :8011  Skill Pipeline Composer (Phase 14)
 │   ├── miner.py          :8012  Behavior Mining Engine (Phase 15)
 │   ├── swarm_router.py   :8013  Bee Specialization — 5 abeilles (Phase 16)
-│   └── validator.py      :8014  Skill Validator Loop — 5 checks + deploy/quarantine (Phase 17)
+│   ├── validator.py      :8014  Skill Validator Loop — 5 checks + deploy/quarantine (Phase 17)
+│   └── computer_use.py   :8015  Computer Use Master — See→Plan→Act→Verify GUI sessions (Phase 18)
 │
 ├── core/
 │   ├── consciousness/            ← NOUVEAU — conscience universelle

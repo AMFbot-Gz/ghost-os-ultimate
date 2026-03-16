@@ -133,6 +133,14 @@ LAYERS = [
         "depends_on": ["Evolution"],
     },
     {
+        "name": "ComputerUse",
+        "file": "agent.computer_use",
+        "port": 8015,
+        "desc": "GUI sessions See→Plan→Act→Verify · moondream",
+        "emoji": "🖥️",
+        "depends_on": ["Brain", "Perception", "Executor"],
+    },
+    {
         "name": "SwarmRouter",
         "file": "agent.swarm_router",
         "port": 8013,

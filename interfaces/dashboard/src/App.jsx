@@ -27,6 +27,7 @@ import HITLPage          from "./components/pages/HITLPage.jsx";
 import PipelinePage      from "./components/pages/PipelinePage.jsx";
 import MinerPage         from "./components/pages/MinerPage.jsx";
 import ValidatorPage     from "./components/pages/ValidatorPage.jsx";
+import ComputerUsePage   from "./components/pages/ComputerUsePage.jsx";
 
 const QUEEN_API = import.meta.env.VITE_QUEEN_API || "http://localhost:3000";
 const WS_URL    = import.meta.env.VITE_WS_URL    || "ws://localhost:9001";
@@ -99,7 +100,7 @@ function TopBar({ status, onRestart }) {
 }
 
 // Pages map
-const PAGES = { overview: Overview, missions: Missions, agents: Agents, skills: Skills, system: System, logs: Logs, settings: Settings, swarm: SwarmPage, goals: GoalsPage, pencil: PencilPage, config: ConfigPage, analytics: AnalyticsPage, "brain-trace": BrainTracePage, memory: MemoryPage, evolution: EvolutionPage, observability: ObservabilityPage, planner: PlannerPage, learner: LearnerPage, hitl: HITLPage, pipeline: PipelinePage, miner: MinerPage, validator: ValidatorPage };
+const PAGES = { overview: Overview, missions: Missions, agents: Agents, skills: Skills, system: System, logs: Logs, settings: Settings, swarm: SwarmPage, goals: GoalsPage, pencil: PencilPage, config: ConfigPage, analytics: AnalyticsPage, "brain-trace": BrainTracePage, memory: MemoryPage, evolution: EvolutionPage, observability: ObservabilityPage, planner: PlannerPage, learner: LearnerPage, hitl: HITLPage, pipeline: PipelinePage, miner: MinerPage, validator: ValidatorPage, "computer-use": ComputerUsePage };
 
 function AppInner() {
   const [page, setPage] = useState("overview");

@@ -2784,6 +2784,61 @@ async def miner_health():
     return await _proxy_miner("GET", "/health")
 
 
+# ─── Computer Use proxy (:8015) ───────────────────────────────────────────────
+
+_CU_URL = "http://localhost:8015"
+
+
+async def _proxy_cu(method: str, path: str, body: dict | None = None, params: dict | None = None):
+    try:
+        async with httpx.AsyncClient(timeout=180) as c:
+            if method == "GET":
+                r = await c.get(f"{_CU_URL}{path}", params=params)
+            elif method == "POST":
+                r = await c.post(f"{_CU_URL}{path}", json=body or {}, params=params)
+            else:
+                r = await c.request(method, f"{_CU_URL}{path}", json=body, params=params)
+            r.raise_for_status()
+            return r.json()
+    except Exception as e:
+        return {"error": str(e), "layer": "computer_use", "path": path}
+
+
+@app.post("/cu/session/start")
+async def cu_start(req: dict):
+    return await _proxy_cu("POST", "/session/start", req)
+
+
+@app.get("/cu/session/{session_id}")
+async def cu_get_session(session_id: str):
+    return await _proxy_cu("GET", f"/session/{session_id}")
+
+
+@app.post("/cu/session/{session_id}/stop")
+async def cu_stop(session_id: str):
+    return await _proxy_cu("POST", f"/session/{session_id}/stop")
+
+
+@app.post("/cu/screenshot")
+async def cu_screenshot(req: dict = {}):
+    return await _proxy_cu("POST", "/screenshot", req)
+
+
+@app.get("/cu/sessions")
+async def cu_sessions(limit: int = Query(20)):
+    return await _proxy_cu("GET", "/sessions", params={"limit": limit})
+
+
+@app.get("/cu/stats")
+async def cu_stats():
+    return await _proxy_cu("GET", "/stats")
+
+
+@app.get("/cu/health")
+async def cu_health():
+    return await _proxy_cu("GET", "/health")
+
+
 # ─── Validator proxy (:8014) ──────────────────────────────────────────────────
 
 _VALIDATOR_URL = "http://localhost:8014"
