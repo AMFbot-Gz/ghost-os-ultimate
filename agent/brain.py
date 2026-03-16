@@ -2987,6 +2987,59 @@ async def health():
     }
 
 
+# ─── Consciousness Bridge proxy (:8016) ──────────────────────────────────────
+
+_CONSCIOUSNESS_URL = "http://localhost:8016"
+
+
+async def _proxy_consciousness(method: str, path: str, body: dict | None = None, params: dict | None = None):
+    try:
+        async with httpx.AsyncClient(timeout=6.0) as client:
+            url = f"{_CONSCIOUSNESS_URL}{path}"
+            if method == "GET":
+                r = await client.get(url, params=params)
+            else:
+                r = await client.post(url, json=body)
+            return r.json()
+    except Exception as e:
+        return {"error": str(e), "layer": "consciousness_bridge", "path": path}
+
+
+@app.get("/consciousness/state")
+async def consciousness_state():
+    return await _proxy_consciousness("GET", "/state")
+
+
+@app.get("/consciousness/layers")
+async def consciousness_layers():
+    return await _proxy_consciousness("GET", "/layers")
+
+
+@app.get("/consciousness/events")
+async def consciousness_events(limit: int = Query(50)):
+    return await _proxy_consciousness("GET", "/events", params={"limit": limit})
+
+
+@app.get("/consciousness/signals")
+async def consciousness_signals(limit: int = Query(50)):
+    return await _proxy_consciousness("GET", "/signals", params={"limit": limit})
+
+
+@app.get("/consciousness/stats")
+async def consciousness_stats():
+    return await _proxy_consciousness("GET", "/stats")
+
+
+@app.post("/consciousness/emit")
+async def consciousness_emit(req: dict):
+    return await _proxy_consciousness("POST", "/emit", req)
+
+
+@app.get("/consciousness/health")
+async def consciousness_health():
+    return await _proxy_consciousness("GET", "/health")
+
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=CONFIG["ports"]["brain"])

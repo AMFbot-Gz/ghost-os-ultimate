@@ -29,8 +29,9 @@ export class UniversalConsciousness {
   constructor(options = {}) {
     this.event_bus    = options.event_bus    || new NeuralEventBus();
     this.memory       = options.memory       || new EpisodicMemorySystem();
-    this.agent_queen_url = options.queen_url || 'http://localhost:8001';
-    this.node_queen_url  = options.node_url  || 'http://localhost:3000';
+    this.agent_queen_url    = options.queen_url    || 'http://localhost:8001';
+    this.node_queen_url     = options.node_url     || 'http://localhost:3000';
+    this.bridge_url         = options.bridge_url   || 'http://localhost:8016';
 
     this.state = {
       self_awareness:           false,
@@ -45,6 +46,7 @@ export class UniversalConsciousness {
 
     this._loop_handle = null;
     this._running     = false;
+    this._bridge_ok   = false;   // true si le bridge répond
 
     // Tâches périodiques issues de HEARTBEAT.md
     this._heartbeat_tasks = this._loadHeartbeat();
@@ -57,6 +59,7 @@ export class UniversalConsciousness {
     this._running = true;
 
     try {
+      await this._probeBridge();
       await this._establishSelfAwareness();
       await this._establishEnvironmentalAwareness();
       await this._establishGoalAwareness();
@@ -79,6 +82,91 @@ export class UniversalConsciousness {
     return { ...this.state };
   }
 
+  // ─── Bridge Python ────────────────────────────────────────────────────────
+
+  /**
+   * Teste si le Consciousness Bridge Python est disponible.
+   * Degraded-mode si absent : la conscience reste fonctionnelle, juste sans les 15 couches.
+   */
+  async _probeBridge() {
+    try {
+      await this._fetchJSON(`${this.bridge_url}/health`);
+      this._bridge_ok = true;
+      console.log('[Consciousness] 🔌 Bridge Python :8016 connecté');
+    } catch {
+      this._bridge_ok = false;
+      console.warn('[Consciousness] ⚠️  Bridge Python indisponible — mode dégradé sans couches Python');
+    }
+  }
+
+  /**
+   * Envoie un événement au Consciousness Bridge Python.
+   * @param {string} type  — type d'événement NeuralEventBus
+   * @param {object} data  — payload
+   */
+  async _emitToBridge(type, data = {}) {
+    if (!this._bridge_ok) return;
+    try {
+      const body = JSON.stringify({
+        type,
+        source:    'universal_consciousness',
+        data,
+        timestamp: new Date().toISOString(),
+      });
+      await new Promise((resolve, reject) => {
+        import('node:http').then(({ default: http }) => {
+          const url = new URL(`${this.bridge_url}/emit`);
+          const req = http.request({
+            hostname: url.hostname,
+            port:     parseInt(url.port || 80),
+            path:     url.pathname,
+            method:   'POST',
+            headers:  { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body) },
+          }, res => {
+            res.resume();
+            resolve();
+          });
+          req.on('error', reject);
+          req.setTimeout(3000, () => { req.destroy(); reject(new Error('timeout')); });
+          req.write(body);
+          req.end();
+        });
+      });
+    } catch (err) {
+      // Silencieux — le bridge peut être temporairement indisponible
+      this._bridge_ok = false;
+    }
+  }
+
+  /**
+   * Récupère l'état de santé des 15 couches Python depuis le bridge.
+   * Retourne null si le bridge est indisponible.
+   */
+  async _fetchLayersFromBridge() {
+    if (!this._bridge_ok) return null;
+    try {
+      const data = await this._fetchJSON(`${this.bridge_url}/layers`);
+      this._bridge_ok = true;
+      return data;
+    } catch {
+      this._bridge_ok = false;
+      return null;
+    }
+  }
+
+  /**
+   * Récupère les N signaux phéromone récents depuis le bridge.
+   */
+  async _fetchPheromoneSignals(limit = 10) {
+    if (!this._bridge_ok) return [];
+    try {
+      const data = await this._fetchJSON(`${this.bridge_url}/signals?limit=${limit}`);
+      return data.signals || [];
+    } catch {
+      return [];
+    }
+  }
+
   // ─── Étapes d'initialisation ──────────────────────────────────────────────
 
   async _establishSelfAwareness() {
@@ -92,6 +180,7 @@ export class UniversalConsciousness {
 
     this.state.self_awareness = true;
     await this.event_bus.emit('self.aware', self_model);
+    await this._emitToBridge('self.aware', self_model);
     console.log('[Consciousness] ✅ Auto-perception établie');
   }
 
@@ -133,6 +222,7 @@ export class UniversalConsciousness {
     this.state.active_goals  = goals;
     this.state.goal_awareness = true;
     await this.event_bus.emit('goals.established', goals);
+    await this._emitToBridge('goals.established', goals);
     console.log(`[Consciousness] ✅ ${goals.length} objectif(s) actif(s)`);
   }
 
@@ -144,6 +234,7 @@ export class UniversalConsciousness {
     };
 
     await this.event_bus.emit('modalities.integrated', integration);
+    await this._emitToBridge('modalities.integrated', integration);
     console.log('[Consciousness] ✅ Intégration multimodale prête');
   }
 
@@ -178,16 +269,36 @@ export class UniversalConsciousness {
       // 3. Évaluation des goals
       const goals_status = await this._evaluateGoals(perception);
 
-      // 4. Émission du heartbeat
-      await this.event_bus.emit('consciousness.heartbeat', {
+      // 4. Signaux phéromone depuis les couches Python
+      const pheromone_signals = await this._fetchPheromoneSignals(5);
+      if (pheromone_signals.length > 0) {
+        await this.memory.storeEpisode({
+          type:       'pheromone_signals',
+          cycle:      this.state.cycle,
+          signals:    pheromone_signals,
+          timestamp:  Date.now(),
+        });
+      }
+
+      // 5. Émission du heartbeat (NeuralEventBus local + Bridge Python)
+      const heartbeat_payload = {
         cycle:        this.state.cycle,
         perception,
         goals_status,
         state:        this.getState(),
-      });
+        pheromone_signals,
+        bridge_ok:    this._bridge_ok,
+      };
+      await this.event_bus.emit('consciousness.heartbeat', heartbeat_payload);
+      await this._emitToBridge('consciousness.heartbeat', heartbeat_payload);
 
-      // 5. Tâches périodiques HEARTBEAT.md
+      // 6. Tâches périodiques HEARTBEAT.md
       await this._runHeartbeatTasks();
+
+      // 7. Re-probe le bridge si il était down
+      if (!this._bridge_ok && this.state.cycle % 3 === 0) {
+        await this._probeBridge();
+      }
 
       this.state.errors = 0;
 
@@ -209,19 +320,29 @@ export class UniversalConsciousness {
 
   async _perceiveEnvironment() {
     try {
-      const [health, system] = await Promise.allSettled([
+      const [health, system, bridge_layers] = await Promise.allSettled([
         this._fetchJSON(`${this.agent_queen_url}/health`),
         this._fetchJSON(`${this.node_queen_url}/api/system`),
+        this._fetchLayersFromBridge(),
       ]);
 
+      const layers_data = bridge_layers.status === 'fulfilled' ? bridge_layers.value : null;
+      const online_count = layers_data
+        ? layers_data.online_count
+        : (health.status === 'fulfilled' ? 1 : 0);
+
       return {
-        timestamp:   Date.now(),
-        layers:      health.status === 'fulfilled' ? health.value : null,
-        system:      system.status === 'fulfilled' ? system.value : null,
-        online:      health.status === 'fulfilled',
+        timestamp:     Date.now(),
+        layers:        health.status === 'fulfilled' ? health.value : null,
+        system:        system.status === 'fulfilled' ? system.value : null,
+        online:        health.status === 'fulfilled',
+        bridge_layers: layers_data,
+        online_layers: online_count,
+        total_layers:  15,
+        bridge_ok:     this._bridge_ok,
       };
     } catch {
-      return { timestamp: Date.now(), online: false };
+      return { timestamp: Date.now(), online: false, bridge_ok: false };
     }
   }
 

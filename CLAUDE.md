@@ -31,7 +31,8 @@ Ghost OS Ultimate v1.0.0
 │   ├── miner.py          :8012  Behavior Mining Engine (Phase 15)
 │   ├── swarm_router.py   :8013  Bee Specialization — 5 abeilles (Phase 16)
 │   ├── validator.py      :8014  Skill Validator Loop — 5 checks + deploy/quarantine (Phase 17)
-│   └── computer_use.py   :8015  Computer Use Master — See→Plan→Act→Verify GUI sessions (Phase 18)
+│   ├── computer_use.py   :8015  Computer Use Master — See→Plan→Act→Verify GUI sessions (Phase 18)
+│   └── consciousness_bridge.py :8016  NeuralEventBus ↔ 15 couches Python · signaux phéromone · WS (Phase 19)
 │
 ├── core/
 │   ├── consciousness/            ← NOUVEAU — conscience universelle
@@ -195,6 +196,7 @@ mkdir skills/mon_skill
 - **Node.js** 20+ (ESM), Hono + WebSocket, Telegraf, PM2
 - **Python** 3.11+, FastAPI, pyautogui, httpx, SQLite
 - **Bee Specialization** :8013 — UIAgent · FileAgent · CodeAgent · WebAgent · SystemAgent · routage keyword scoring · Brain mission_type → domain-contexts/
+- **Consciousness Bridge** :8016 — NeuralEventBus Node.js ↔ 15 couches Python · tail-follow signals.jsonl · WebSocket /ws · POST /emit · GET /layers|/state|/events|/signals
 - **LLM** Ollama local (llama3, moondream) + Claude API fallback
 - **Frontend** React 18 + Vite + Tailwind (dashboard), Electron (HUD)
 - **Tests** Jest 29 (ESM) + Pytest
