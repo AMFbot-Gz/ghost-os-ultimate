@@ -1,0 +1,22 @@
+# railway.toml — Configuration déploiement Railway
+[build]
+builder = "nixpacks"
+buildCommand = "npm install && pip3 install -r requirements.txt"
+
+[deploy]
+startCommand = "node src/queen_oss.js"
+healthcheckPath = "/api/health"
+healthcheckTimeout = 30
+restartPolicyType = "on_failure"
+restartPolicyMaxRetries = 3
+
+[[services]]
+name = "api"
+source = "."
+
+[services.variables]
+NODE_ENV = "production"
+STANDALONE_MODE = "true"
+PORT = "${{PORT}}"
+ANTHROPIC_API_KEY = "${{ANTHROPIC_API_KEY}}"
+GHOST_OS_MODE = "cloud"

@@ -1,0 +1,30 @@
+# Dockerfile.api — Ghost OS Ultimate API (Node.js Queen)
+FROM node:20-alpine AS builder
+
+WORKDIR /app
+COPY package*.json ./
+RUN npm ci --only=production
+
+FROM node:20-alpine AS runtime
+
+WORKDIR /app
+RUN apk add --no-cache curl
+
+COPY --from=builder /app/node_modules ./node_modules
+COPY src/ ./src/
+COPY skills/ ./skills/
+COPY core/ ./core/
+COPY bin/ ./bin/
+COPY package.json ./
+COPY .env.example ./.env.example
+
+ENV NODE_ENV=production
+ENV STANDALONE_MODE=true
+ENV PORT=3000
+
+EXPOSE 3000
+
+HEALTHCHECK --interval=30s --timeout=10s --start-period=15s --retries=3 \
+  CMD curl -f http://localhost:3000/api/health || exit 1
+
+CMD ["node", "src/queen_oss.js"]

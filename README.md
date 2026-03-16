@@ -1,189 +1,142 @@
-# Ghost OS Ultimate
+# 👻 Ghost OS Ultimate
 
-**Agent autonome hybride 100% local — computer use, mémoire épisodique, skills extensibles.**
+**Open Source Autonomous AI Agent Platform** — macOS · Python · Node.js
 
-Ghost OS Ultimate tourne entièrement sur ta machine. Aucune donnée envoyée dans le cloud. Tu gardes le contrôle depuis Telegram avec un HITL (Human-in-the-Loop) à 120 secondes.
+[![Deploy on Railway](https://railway.app/button.svg)](https://railway.app/template/ghost-os)
 
-```
-┌─────────────────────────────────────────────────────────┐
-│                   Ghost OS Ultimate                     │
-│                                                         │
-│  Telegram / REST / CLI  ──►  Queen Node.js :3000        │
-│                               │                         │
-│                    ┌──────────┼──────────┐              │
-│                    ▼          ▼          ▼              │
-│             Brain :8003  Memory :8006  Exec :8004       │
-│             Perception  Evolution   MCP Bridge          │
-│                    :8002      :8005      :8007           │
-│                    └──────────┼──────────┘              │
-│                               ▼                         │
-│              38 Skills · 9 MCP Servers · HUD Electron   │
-└─────────────────────────────────────────────────────────┘
-```
+> 16 Python layers + Node.js Queen + Claude Vision Computer Use + Auto-evolution
 
-## Prérequis
+---
 
-| Outil | Version |
-|---|---|
-| Node.js | ≥ 20 |
-| Python | ≥ 3.11 |
-| Ollama | latest |
-| macOS | ≥ 13 (Ventura) |
-
-```bash
-# Modèles Ollama requis
-ollama pull llama3
-ollama pull llama3.2:3b
-ollama pull moondream
-```
-
-## Installation
+## Quick Start (30 seconds)
 
 ```bash
 git clone https://github.com/AMFbot-Gz/ghost-os-ultimate
 cd ghost-os-ultimate
+cp .env.example .env        # Add ANTHROPIC_API_KEY + TELEGRAM_BOT_TOKEN
 
-# Dépendances Node.js
-npm install
+# One-click setup: LaunchAgent + PM2 + Cron + preflight
+bash scripts/setup_7day_autonomy.sh
 
-# Dépendances Python (runtime minimal — <2 min)
-pip3 install -r requirements-runtime.txt
-
-# Configuration
-cp .env.example .env
-# Éditer .env : TELEGRAM_BOT_TOKEN, ADMIN_TELEGRAM_ID, CHIMERA_SECRET
-```
-
-## Démarrage rapide (5 commandes)
-
-```bash
-# 1. Vérifier l'environnement
-node bin/ghost.js setup
-
-# 2. Terminal 1 — 7 couches Python
-python3 start_agent.py
-
-# 3. Terminal 2 — Queen Node.js
-npm run ultimate
-
-# 4. Vérifier l'état
-node bin/ghost.js status
-
-# 5. Lancer une première mission
-node bin/ghost.js mission "Prends un screenshot et décris ce que tu vois"
-```
-
-## Dashboard
-
-```bash
-cd interfaces/dashboard && npm install && npm run dev
-# → http://localhost:5173
+# Send a mission
+curl -X POST http://localhost:3000/api/mission \
+  -H "Content-Type: application/json" \
+  -d '{"command": "Organize my Desktop folder"}'
 ```
 
 ## Architecture
 
 ```
-ghost-os-ultimate/
-├── src/               Queen Node.js :3000 — orchestrateur principal
-├── agent/             7 couches Python FastAPI :8001-8007
-├── core/
-│   ├── consciousness/ UniversalConsciousness + NeuralEventBus + EpisodicMemory
-│   ├── agents/        StrategistAgent
-│   ├── chimera_bus.js Mutations signées HMAC-SHA256
-│   └── phagocyte.js   Auto-patchs YAML/code vérifiés
-├── skills/            38 skills Node.js (computer use, system, web...)
-├── mcp_servers/       9 MCP servers
-├── runtime/
-│   ├── modes/         UltimateMode · LiteMode
-│   └── deployment/    AutoDeployment + Dockerfile
-├── ecosystem/
-│   └── marketplace/   SkillsMarketplace
-├── interfaces/
-│   ├── dashboard/     React + Vite
-│   └── hud/           Electron overlay
-└── config/
-    └── default/       ghost_os_ultimate.yml
+Ghost OS Ultimate
+├── Queen Node.js :3000     ← REST API + 29 skills + Telegram + WebSocket HUD
+├── Python Layers
+│   ├── :8001 Queen.py      ← Vital loop + HITL
+│   ├── :8003 Brain.py      ← ReAct + ToT + Claude/Kimi/Ollama fallback
+│   ├── :8004 Executor.py   ← Shell sandbox + PyAutoGUI
+│   ├── :8005 Evolution.py  ← Auto-generates skills via Claude
+│   ├── :8006 Memory.py     ← ChromaDB semantic memory
+│   ├── :8014 Validator.py  ← Confidence scoring (gold/silver/bronze)
+│   └── :8015 ComputerUse  ← Claude Vision GUI automation (Retina-aware)
+└── Autonomous Weekly Cycle
+    ├── dream_cycle (1h)     → extract heuristics from episodes
+    ├── architect_cycle (Sun 3am) → fill skill gaps, update docs, git tag
+    └── self_healing (10s)   → circuit breaker per layer, auto-restart
 ```
 
-## Telegram HITL
+## Features
 
-Une fois le bot configuré :
+| Feature | Status |
+|---------|--------|
+| Computer Use (Claude Vision) | ✅ Zero-config, Retina-aware |
+| ReAct + Tree of Thoughts | ✅ Multi-step reasoning |
+| Self-healing layers | ✅ Circuit breaker + exponential backoff |
+| Auto-skill generation | ✅ Claude generates Node.js skills |
+| Semantic memory | ✅ ChromaDB + heuristics |
+| HITL via Telegram | ✅ Approval + 120s countdown |
+| Weekly autonomous cycle | ✅ Audit → gaps → generate → tag |
+| Docker production | ✅ `infra/docker/` |
+| Railway deploy | ✅ `railway.toml` |
+| SaaS auth (API keys) | ✅ `src/saas/` |
 
-| Commande | Effet |
-|---|---|
-| `/status` | État des 8 couches |
-| `/mission <texte>` | Lancer une mission |
-| `ok-XXXX` | Approuver une action risquée |
-| `non-XXXX` | Annuler (timeout auto 120s) |
+## Deploy
 
-## Skills marketplace
+### Local (recommended)
+```bash
+bash scripts/setup_7day_autonomy.sh
+```
+
+### Docker
+```bash
+cp .env.example .env
+docker-compose -f infra/docker/docker-compose.prod.yml up -d
+```
+
+### Railway (cloud API, no Computer Use)
+[![Deploy on Railway](https://railway.app/button.svg)](https://railway.app/template/ghost-os)
+
+### Vercel (dashboard only)
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https://github.com/AMFbot-Gz/ghost-os-ultimate&root=interfaces/dashboard)
+
+## Environment Variables
 
 ```bash
-# Lister les skills installés
-node bin/ghost.js skill list
+# Required
+ANTHROPIC_API_KEY=sk-ant-...      # Claude API
+TELEGRAM_BOT_TOKEN=...            # @BotFather
+ADMIN_TELEGRAM_ID=...             # @userinfobot
 
-# Stats
-node bin/ghost.js skill stats
+# Optional
+OLLAMA_HOST=http://localhost:11434
+GHOST_OS_MODE=ultimate            # ultimate | lite | cloud
+CHIMERA_SECRET=...                # API auth secret
+```
+
+## API
+
+```bash
+# Mission
+POST /api/mission    {"command": "your task"}
+
+# Status
+GET  /api/health
+GET  /api/agents
+GET  /api/skills
+
+# Computer Use
+POST /api/v1/cu/session   {"goal": "...", "max_steps": 10}
+GET  /api/v1/cu/session/:id
+
+# API Keys (SaaS)
+POST /api/v1/keys
+GET  /api/v1/usage
 ```
 
 ## Tests
 
 ```bash
-npm test                  # 243+ tests Jest
-npm run test:python       # 287+ tests Pytest
-npm run test:all          # Suite complète
+npm test                  # 289 Jest tests
+npm run test:python       # 990 Pytest tests
+python3 scripts/architect_weekly_cycle.py --dry-run  # Full audit
 ```
 
-## Variables .env
+## Roadmap
 
-```bash
-# Obligatoires
-TELEGRAM_BOT_TOKEN=       # depuis @BotFather
-ADMIN_TELEGRAM_ID=        # depuis @userinfobot
-CHIMERA_SECRET=           # chaîne aléatoire longue (openssl rand -hex 32)
+- [x] Computer Use Vision (zero-config)
+- [x] Self-healing daemon (circuit breaker)
+- [x] Weekly autonomous architect cycle
+- [x] SaaS auth layer (API keys)
+- [x] Railway + Docker + Vercel deploy configs
+- [ ] Cloud-hosted version (no local GPU needed)
+- [ ] Multi-tenant isolation
+- [ ] Stripe billing integration
+- [ ] Public skill marketplace
 
-# Ollama
-STANDALONE_MODE=true
-OLLAMA_HOST=http://localhost:11434
+## Sister Repos (Historical)
 
-# Optionnels
-ANTHROPIC_API_KEY=        # fallback cloud pour Brain layer
-GHOST_OS_MODE=ultimate    # ultimate | lite
-HITL_TIMEOUT_SECONDS=120
-```
+- **[PICO-RUCHE](https://github.com/AMFbot-Gz/PICO-RUCHE)** — Ghost OS v5.0 (archived, predecessor)
+- **[LaRuche](https://github.com/AMFbot-Gz/LaRuche)** — Chimera OS prototype (archived)
+- **[AMFbot-Suite](https://github.com/AMFbot-Gz/AMFbot-Suite)** — Legacy JARVIS v2.6 (archived)
 
-## Docker
+## License
 
-```bash
-docker-compose up -d
-# Queen Node.js  → http://localhost:3000
-# Python Queen   → http://localhost:8001
-```
-
-## Modes d'exécution
-
-| Mode | RAM | Missions parallèles | Conscience |
-|---|---|---|---|
-| `ultimate` | illimitée | 5 | ✅ |
-| `lite` | 500 MB | 1 | ❌ |
-
-```bash
-npm run ultimate   # Mode ultime
-npm run lite       # Mode léger (machines < 8 GB)
-```
-
-## Sécurité
-
-- Shell sandboxé — patterns bloqués : `rm -rf /`, fork bomb, `dd if=/dev/zero`, `mkfs`, `shutdown`
-- HITL obligatoire pour risque HIGH
-- Chimera Bus signé HMAC-SHA256
-- Timeout sandbox max 30s
-- pyautogui FAILSAFE (coin haut-gauche = arrêt d'urgence)
-
-## Contribuer
-
-Voir [CONTRIBUTING.md](CONTRIBUTING.md).
-
-## Licence
-
-MIT — voir [LICENSE](LICENSE).
+MIT — Free to use, modify, deploy.

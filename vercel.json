@@ -1,0 +1,22 @@
+{
+  "version": 2,
+  "name": "ghost-os-dashboard",
+  "builds": [
+    {
+      "src": "interfaces/dashboard/package.json",
+      "use": "@vercel/static-build",
+      "config": {
+        "distDir": "dist"
+      }
+    }
+  ],
+  "routes": [
+    {
+      "src": "/(.*)",
+      "dest": "/interfaces/dashboard/$1"
+    }
+  ],
+  "env": {
+    "VITE_API_URL": "@ghost_api_url"
+  }
+}

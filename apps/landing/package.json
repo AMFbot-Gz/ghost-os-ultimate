@@ -1,0 +1,10 @@
+{
+  "name": "ghost-os-landing",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "python3 -m http.server 4000",
+    "build": "cp -r . ../dist/landing",
+    "preview": "python3 -m http.server 4001"
+  }
+}

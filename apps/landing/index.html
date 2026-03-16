@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Ghost OS — Autonomous AI Agent Platform</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    :root {
+      --bg: #0f0f13;
+      --surface: #1a1a24;
+      --border: #2a2a3a;
+      --accent: #7c3aed;
+      --accent2: #06b6d4;
+      --text: #e2e8f0;
+      --muted: #94a3b8;
+      --green: #10b981;
+    }
+    body { background: var(--bg); color: var(--text); font-family: system-ui, sans-serif; line-height: 1.6; }
+
+    /* NAV */
+    nav { display: flex; justify-content: space-between; align-items: center; padding: 1rem 2rem; border-bottom: 1px solid var(--border); backdrop-filter: blur(10px); position: sticky; top: 0; background: rgba(15,15,19,0.9); z-index: 100; }
+    .logo { font-size: 1.4rem; font-weight: 700; background: linear-gradient(135deg, var(--accent), var(--accent2)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+    .nav-links { display: flex; gap: 2rem; align-items: center; }
+    .nav-links a { color: var(--muted); text-decoration: none; transition: color 0.2s; }
+    .nav-links a:hover { color: var(--text); }
+    .btn { padding: 0.5rem 1.25rem; border-radius: 8px; font-weight: 600; cursor: pointer; transition: all 0.2s; text-decoration: none; display: inline-block; }
+    .btn-primary { background: var(--accent); color: white; border: none; }
+    .btn-primary:hover { background: #6d28d9; transform: translateY(-1px); }
+    .btn-outline { border: 1px solid var(--border); color: var(--text); background: transparent; }
+    .btn-outline:hover { border-color: var(--accent); color: var(--accent); }
+
+    /* HERO */
+    .hero { text-align: center; padding: 6rem 2rem 4rem; max-width: 900px; margin: 0 auto; }
+    .badge { display: inline-block; background: rgba(124,58,237,0.15); border: 1px solid rgba(124,58,237,0.4); color: var(--accent); padding: 0.25rem 0.75rem; border-radius: 999px; font-size: 0.8rem; font-weight: 600; margin-bottom: 1.5rem; letter-spacing: 0.05em; }
+    h1 { font-size: clamp(2.5rem, 6vw, 4.5rem); font-weight: 800; line-height: 1.1; margin-bottom: 1.5rem; }
+    h1 span { background: linear-gradient(135deg, var(--accent), var(--accent2)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+    .hero p { font-size: 1.25rem; color: var(--muted); max-width: 600px; margin: 0 auto 2.5rem; }
+    .hero-buttons { display: flex; gap: 1rem; justify-content: center; flex-wrap: wrap; }
+
+    /* CODE DEMO */
+    .code-block { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 1.5rem; text-align: left; max-width: 600px; margin: 3rem auto 0; font-family: 'Courier New', monospace; font-size: 0.9rem; }
+    .code-block .comment { color: #6b7280; }
+    .code-block .keyword { color: var(--accent2); }
+    .code-block .string { color: #86efac; }
+    .code-block .prompt { color: var(--accent); }
+
+    /* FEATURES */
+    .section { padding: 5rem 2rem; max-width: 1200px; margin: 0 auto; }
+    .section-title { text-align: center; font-size: 2.2rem; font-weight: 700; margin-bottom: 0.75rem; }
+    .section-sub { text-align: center; color: var(--muted); margin-bottom: 3rem; font-size: 1.1rem; }
+    .grid-3 { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1.5rem; }
+    .card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 1.75rem; transition: border-color 0.2s, transform 0.2s; }
+    .card:hover { border-color: var(--accent); transform: translateY(-2px); }
+    .card-icon { font-size: 2rem; margin-bottom: 1rem; }
+    .card h3 { font-size: 1.1rem; font-weight: 700; margin-bottom: 0.5rem; }
+    .card p { color: var(--muted); font-size: 0.9rem; }
+
+    /* ARCHITECTURE */
+    .arch { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 2rem; font-family: monospace; font-size: 0.85rem; white-space: pre; overflow-x: auto; color: var(--muted); }
+    .arch .hl { color: var(--accent2); }
+    .arch .green { color: var(--green); }
+
+    /* PRICING */
+    .pricing-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 1.5rem; }
+    .pricing-card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 2rem; }
+    .pricing-card.featured { border-color: var(--accent); background: rgba(124,58,237,0.08); }
+    .price { font-size: 2.5rem; font-weight: 800; margin: 1rem 0; }
+    .price span { font-size: 1rem; color: var(--muted); font-weight: 400; }
+    .features-list { list-style: none; margin: 1.5rem 0; }
+    .features-list li { padding: 0.4rem 0; color: var(--muted); font-size: 0.9rem; }
+    .features-list li::before { content: "✓ "; color: var(--green); }
+
+    /* STATS */
+    .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 1.5rem; text-align: center; padding: 3rem 2rem; background: var(--surface); border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); }
+    .stat-value { font-size: 2.5rem; font-weight: 800; color: var(--accent); }
+    .stat-label { color: var(--muted); font-size: 0.9rem; }
+
+    /* CTA */
+    .cta { text-align: center; padding: 6rem 2rem; }
+    .cta h2 { font-size: 2.5rem; font-weight: 800; margin-bottom: 1rem; }
+    .cta p { color: var(--muted); margin-bottom: 2rem; font-size: 1.1rem; }
+
+    /* FOOTER */
+    footer { border-top: 1px solid var(--border); padding: 2rem; text-align: center; color: var(--muted); font-size: 0.85rem; }
+    footer a { color: var(--muted); text-decoration: none; margin: 0 0.75rem; }
+    footer a:hover { color: var(--text); }
+  </style>
+</head>
+<body>
+
+<nav>
+  <div class="logo">👻 Ghost OS</div>
+  <div class="nav-links">
+    <a href="#features">Features</a>
+    <a href="#architecture">Architecture</a>
+    <a href="#pricing">Pricing</a>
+    <a href="https://github.com/AMFbot-Gz/ghost-os-ultimate">GitHub</a>
+    <a href="/dashboard" class="btn btn-outline">Dashboard</a>
+    <a href="#start" class="btn btn-primary">Get Started</a>
+  </div>
+</nav>
+
+<section class="hero">
+  <div class="badge">🚀 Open Source AI Agent Platform</div>
+  <h1>The <span>Autonomous AI Agent</span><br>that runs your Mac</h1>
+  <p>16 Python layers + Node.js Queen + Claude Vision Computer Use. Zero-config, self-healing, self-improving. Deploy in 1 command.</p>
+  <div class="hero-buttons">
+    <a href="#start" class="btn btn-primary" style="font-size:1.1rem;padding:0.75rem 2rem">Deploy Now →</a>
+    <a href="https://github.com/AMFbot-Gz/ghost-os-ultimate" class="btn btn-outline" style="font-size:1.1rem;padding:0.75rem 2rem">⭐ GitHub</a>
+  </div>
+
+  <div class="code-block">
+    <div><span class="comment"># Deploy Ghost OS in 30 seconds</span></div>
+    <div><span class="prompt">$</span> <span class="keyword">git clone</span> <span class="string">https://github.com/AMFbot-Gz/ghost-os-ultimate</span></div>
+    <div><span class="prompt">$</span> cp .env.example .env <span class="comment"># Add your ANTHROPIC_API_KEY</span></div>
+    <div><span class="prompt">$</span> <span class="keyword">bash</span> scripts/setup_7day_autonomy.sh</div>
+    <br>
+    <div><span class="comment"># Send your first mission</span></div>
+    <div><span class="prompt">$</span> curl -X POST http://localhost:3000/api/mission \</div>
+    <div>&nbsp;&nbsp; -d <span class="string">'{"command": "Organize my Desktop folder"}'</span></div>
+  </div>
+</section>
+
+<div class="stats">
+  <div><div class="stat-value">16</div><div class="stat-label">Python Layers</div></div>
+  <div><div class="stat-value">29+</div><div class="stat-label">Built-in Skills</div></div>
+  <div><div class="stat-value">1279</div><div class="stat-label">Tests Passing</div></div>
+  <div><div class="stat-value">∞</div><div class="stat-label">Skills Generated</div></div>
+  <div><div class="stat-value">7j</div><div class="stat-label">Full Autonomy</div></div>
+</div>
+
+<section class="section" id="features">
+  <h2 class="section-title">Everything you need</h2>
+  <p class="section-sub">From a simple mission to full desktop automation</p>
+  <div class="grid-3">
+    <div class="card">
+      <div class="card-icon">🖥️</div>
+      <h3>Computer Use Vision</h3>
+      <p>Claude sees your screen, clicks, types, opens apps. Retina-aware, zero-config. Runs on any macOS without setup.</p>
+    </div>
+    <div class="card">
+      <div class="card-icon">🧠</div>
+      <h3>ReAct + ToT Brain</h3>
+      <p>Multi-step reasoning with Tree of Thoughts. Falls back Claude → Kimi → OpenAI → Ollama automatically.</p>
+    </div>
+    <div class="card">
+      <div class="card-icon">🔄</div>
+      <h3>Self-Healing</h3>
+      <p>Circuit breaker per layer, exponential backoff, LaunchAgent restart. Never goes down for more than 60s.</p>
+    </div>
+    <div class="card">
+      <div class="card-icon">🛠️</div>
+      <h3>Auto-Evolution</h3>
+      <p>Generates its own Node.js skills via Claude. 5-layer security sandbox. Weekly cycle identifies gaps and fills them.</p>
+    </div>
+    <div class="card">
+      <div class="card-icon">💾</div>
+      <h3>Semantic Memory</h3>
+      <p>ChromaDB vector search + JSONL episodes + heuristics. Remembers every mission, learns patterns, improves over time.</p>
+    </div>
+    <div class="card">
+      <div class="card-icon">📡</div>
+      <h3>HITL via Telegram</h3>
+      <p>Risky actions require your approval via Telegram. 120s countdown, auto-cancel on timeout. Full audit trail.</p>
+    </div>
+  </div>
+</section>
+
+<section class="section" id="architecture">
+  <h2 class="section-title">Architecture</h2>
+  <p class="section-sub">16 microservices, all talking to each other</p>
+  <div class="arch">
+<span class="hl">Ghost OS Ultimate</span>
+│
+├─ <span class="green">Queen Node.js :3000</span>    ← REST API + WebSocket HUD + Telegram
+│   ├─ 29 skills (computer use, git, http, screenshot...)
+│   ├─ Intent pipeline (NL → skill routing)
+│   └─ Swarm (multi-Ollama load balancing)
+│
+├─ <span class="green">Python Layers</span>
+│   ├─ :8001 Queen.py      ← Vital loop 30s + HITL
+│   ├─ :8003 Brain.py      ← ReAct + ToT + LLM routing
+│   ├─ :8004 Executor.py   ← Shell sandbox + PyAutoGUI
+│   ├─ :8005 Evolution.py  ← Skill factory (AST 5-layer)
+│   ├─ :8006 Memory.py     ← ChromaDB + JSONL
+│   ├─ :8014 Validator.py  ← Confidence scoring
+│   └─ :8015 ComputerUse  ← <span class="hl">Claude Vision loop</span>
+│
+└─ <span class="green">Autonomous Weekly Cycle</span>
+    ├─ dream_cycle     (every hour)   → extract heuristics
+    ├─ architect_cycle (every Sunday) → fill skill gaps
+    └─ self_healing    (every 10s)    → restart dead layers</div>
+</section>
+
+<section class="section" id="pricing">
+  <h2 class="section-title">Pricing</h2>
+  <p class="section-sub">Open source forever. Cloud hosting coming soon.</p>
+  <div class="pricing-grid">
+    <div class="pricing-card">
+      <h3>Free</h3>
+      <div class="price">$0<span>/month</span></div>
+      <ul class="features-list">
+        <li>Self-hosted</li>
+        <li>All 16 layers</li>
+        <li>29+ skills</li>
+        <li>Local Ollama</li>
+        <li>Community support</li>
+      </ul>
+      <a href="https://github.com/AMFbot-Gz/ghost-os-ultimate" class="btn btn-outline" style="width:100%;text-align:center">Deploy Now</a>
+    </div>
+    <div class="pricing-card featured">
+      <h3>Pro ⭐</h3>
+      <div class="price">$79<span>/month</span></div>
+      <ul class="features-list">
+        <li>Everything in Free</li>
+        <li>Claude API included</li>
+        <li>Cloud brain (no local GPU)</li>
+        <li>10,000 API calls/day</li>
+        <li>Priority support</li>
+      </ul>
+      <a href="#start" class="btn btn-primary" style="width:100%;text-align:center">Coming Soon</a>
+    </div>
+    <div class="pricing-card">
+      <h3>Enterprise</h3>
+      <div class="price">Custom</div>
+      <ul class="features-list">
+        <li>Unlimited everything</li>
+        <li>On-premise deployment</li>
+        <li>Custom skills</li>
+        <li>SLA guaranteed</li>
+        <li>Dedicated support</li>
+      </ul>
+      <a href="mailto:contact@ghost-os.dev" class="btn btn-outline" style="width:100%;text-align:center">Contact Us</a>
+    </div>
+  </div>
+</section>
+
+<section class="cta" id="start">
+  <h2>Start in 30 seconds</h2>
+  <p>Open source, no credit card required, runs 100% locally.</p>
+  <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:1.5rem;max-width:600px;margin:2rem auto;font-family:monospace;text-align:left;">
+    <div style="color:#6b7280"># 1. Clone &amp; configure</div>
+    <div>git clone https://github.com/AMFbot-Gz/ghost-os-ultimate</div>
+    <div>cd ghost-os-ultimate &amp;&amp; cp .env.example .env</div>
+    <br>
+    <div style="color:#6b7280"># 2. One-click setup (installs everything)</div>
+    <div>bash scripts/setup_7day_autonomy.sh</div>
+    <br>
+    <div style="color:#6b7280"># 3. Your agent is live ✅</div>
+    <div>open http://localhost:3000/dashboard</div>
+  </div>
+  <div style="display:flex;gap:1rem;justify-content:center;margin-top:2rem;flex-wrap:wrap;">
+    <a href="https://github.com/AMFbot-Gz/ghost-os-ultimate" class="btn btn-primary">⭐ Star on GitHub</a>
+    <a href="https://github.com/AMFbot-Gz/ghost-os-ultimate/blob/main/README.md" class="btn btn-outline">📖 Documentation</a>
+  </div>
+</section>
+
+<footer>
+  <p style="margin-bottom:1rem">
+    <a href="https://github.com/AMFbot-Gz/ghost-os-ultimate">GitHub</a>
+    <a href="https://github.com/AMFbot-Gz/ghost-os-ultimate/blob/main/ARCHITECTURE.md">Docs</a>
+    <a href="mailto:contact@ghost-os.dev">Contact</a>
+  </p>
+  <p>Ghost OS Ultimate — Open Source Autonomous AI Agent | MIT License</p>
+</footer>
+
+</body>
+</html>
