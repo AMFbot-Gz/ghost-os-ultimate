@@ -3,6 +3,8 @@ import os
 import signal
 import subprocess
 import time
+from dataclasses import dataclass, field
+from enum import Enum
 from pathlib import Path
 from typing import Optional
 
@@ -20,8 +22,51 @@ LAYERS = {
     "evolution":  {"file": "agent.evolution",   "port": 8005, "level": 1},
 }
 
-HIBERNATE_TIMEOUT = 300
+HIBERNATE_TIMEOUT  = 300
 EVOLUTION_INTERVAL = 3600
+
+# ─── Circuit Breaker ──────────────────────────────────────────────────────────
+
+class _CBState(Enum):
+    CLOSED    = "CLOSED"
+    OPEN      = "OPEN"
+    HALF_OPEN = "HALF_OPEN"
+
+@dataclass
+class _CircuitBreaker:
+    name: str
+    failure_count: int = 0
+    state: _CBState    = _CBState.CLOSED
+    opened_at: float   = 0.0
+    restart_count: int = 0
+
+    MAX_FAILURES:   int   = field(default=3, repr=False)
+    BACKOFF_BASE:   float = field(default=1.0, repr=False)
+    BACKOFF_MAX:    float = field(default=60.0, repr=False)
+    HALF_OPEN_WAIT: float = field(default=60.0, repr=False)
+
+    def record_failure(self) -> None:
+        self.failure_count += 1
+        if self.failure_count >= self.MAX_FAILURES and self.state == _CBState.CLOSED:
+            self.state     = _CBState.OPEN
+            self.opened_at = time.time()
+
+    def record_success(self) -> None:
+        self.failure_count = 0
+        self.state         = _CBState.CLOSED
+
+    def can_attempt(self) -> bool:
+        if self.state == _CBState.CLOSED:
+            return True
+        if self.state == _CBState.OPEN:
+            if time.time() - self.opened_at > self.HALF_OPEN_WAIT:
+                self.state = _CBState.HALF_OPEN
+                return True
+            return False
+        return True  # HALF_OPEN → try once
+
+    def backoff(self) -> float:
+        return min(self.BACKOFF_BASE * (2 ** self.restart_count), self.BACKOFF_MAX)
 
 
 class LayerManager:
@@ -29,6 +74,7 @@ class LayerManager:
         self._pids: dict[str, Optional[int]] = {name: None for name in LAYERS}
         self._last_activity: dict[str, Optional[float]] = {name: None for name in LAYERS}
         self._locks: dict[str, asyncio.Lock] = {name: asyncio.Lock() for name in LAYERS}
+        self._cb: dict[str, _CircuitBreaker] = {name: _CircuitBreaker(name) for name in LAYERS}
         self._last_evolution: float = 0.0
         self._pids_dir = ROOT / "agent" / ".pids"
         self._logs_dir = ROOT / "agent" / "logs"
@@ -74,12 +120,16 @@ class LayerManager:
         pid_file = self._pids_dir / f"{name}.pid"
         pid_file.write_text(str(proc.pid))
 
-        for attempt in range(3):
-            await asyncio.sleep(1.5)
+        # Exponential backoff: 1.5s → 3s → 6s
+        for attempt in range(4):
+            delay = 1.5 * (2 ** attempt)
+            await asyncio.sleep(min(delay, 10.0))
             if await self._health_check_async(port):
                 self._last_activity[name] = time.time()
+                self._cb[name].record_success()
                 return
-        raise RuntimeError(f"Layer '{name}' failed health check after 3 retries")
+        self._cb[name].record_failure()
+        raise RuntimeError(f"Layer '{name}' failed health check after 4 retries")
 
     async def stop_layer(self, name: str) -> None:
         pid = self._pids.get(name)
@@ -112,16 +162,28 @@ class LayerManager:
         cfg = LAYERS[name]
         if self.is_up(cfg["port"]):
             self._last_activity[name] = time.time()
+            self._cb[name].record_success()
             return True
+
+        cb = self._cb[name]
+        if not cb.can_attempt():
+            return False  # Circuit OPEN — ne pas réessayer
 
         async with self._locks[name]:
             if self.is_up(cfg["port"]):
                 self._last_activity[name] = time.time()
                 return True
+
+            delay = cb.backoff()
+            if delay > 1.0:
+                await asyncio.sleep(delay)
+
             try:
                 await self.start_layer(name)
+                cb.restart_count += 1
                 return True
             except RuntimeError:
+                cb.record_failure()
                 return False
 
     def touch_layer(self, name: str) -> None:

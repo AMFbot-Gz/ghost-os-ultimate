@@ -77,3 +77,29 @@ data/mission_log.jsonl
 
 .env.save
 test-report.html
+
+# Ghost OS — données runtime (générées, pas versionnées)
+.laruche/
+agent/memory/chromadb/
+agent/memory/missions.db
+agent/memory/heuristics.jsonl
+agent/memory/persistent.md
+agent/memory/world_state.json
+agent/user_profile.json
+agent/reflexion.py
+data/
+mutations/
+skills/auto_*/
+skills/*_*/
+
+# WAL SQLite
+*.db-shm
+*.db-wal
+
+# Computer Use screenshots
+/tmp/ghost_cu/
+/tmp/ghost_*.png
+/tmp/ghost_preflight_*.png
+
+# Machine profile (contient résolution/hardware user)
+.laruche/machine_profile.json
