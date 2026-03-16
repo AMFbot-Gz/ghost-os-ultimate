@@ -193,6 +193,14 @@ LAYERS = [
         "depends_on": ["Brain", "Memory"],
     },
     {
+        "name": "SkillSync",
+        "file": "agent.skill_sync",
+        "port": 8019,
+        "desc": "Sync skills Ruche↔Reine — pull/push automatique toutes les 5min",
+        "emoji": "🔄",
+        "depends_on": ["Evolution"],
+    },
+    {
         "name": "Queen",
         "file": "agent.queen",
         "port": 8001,
@@ -494,6 +502,8 @@ def main():
         ("ComputerUse",          8015, "GUI See→Plan→Act→Verify"),
         ("ConsciousnessBridge",  8016, "NeuralEventBus ↔ 17 couches Python"),
         ("Optimizer",            8017, "Self-Optimization Engine"),
+        ("Reflexion",            8018, "méta-apprentissage épisodes échoués"),
+        ("SkillSync",            8019, "sync skills Ruche↔Reine"),
         ("Queen",                8001, "boucle vitale 30s"),
     ]
 

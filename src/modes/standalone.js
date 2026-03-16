@@ -13,6 +13,7 @@ import { createMissionsRoutes } from "../api/missions.js";
 import { createMcpRoutes } from "../api/mcp_routes.js";
 import { createMutationsRoutes } from "../api/mutations.js";
 import { registerConfigRoutes } from "../api/config_routes.js";
+import { registerHubRoutes } from "../hub/skillHub.js";
 import { startCoeusLoop } from "../agents/coeus.js";
 import { readFileSync } from "fs";
 import { resolve, dirname } from "path";
@@ -164,6 +165,10 @@ export function startStandaloneServer(deps) {
   createMcpRoutes(app);
   createMutationsRoutes(app);
   registerConfigRoutes(app);
+
+  // ─── Hub skills distribué ───────────────────────────────────────────────────
+  // La Reine héberge le hub central. Les Ruches publient/pullent via ces routes.
+  registerHubRoutes(app);
 
   // ─── Route racine ───────────────────────────────────────────────────────────
   app.get("/", (c) =>

@@ -20,6 +20,260 @@ from dotenv import load_dotenv
 from contextlib import asynccontextmanager
 load_dotenv()
 
+# ─── Skill Factory — AST 5-Layer Security Sandbox ────────────────────────────
+import ast
+import resource
+import multiprocessing
+import signal as _signal
+
+# Imports autorisés dans les skills auto-générés
+_SKILL_IMPORT_WHITELIST = {
+    # stdlib sûr
+    "os", "sys", "re", "json", "time", "datetime", "pathlib", "typing",
+    "collections", "itertools", "functools", "math", "random", "string",
+    "subprocess", "shutil", "tempfile", "io", "struct", "hashlib",
+    "base64", "urllib", "http", "socket",
+    # tiers autorisés
+    "httpx", "requests", "pydantic", "yaml", "toml",
+    "PIL", "cv2", "numpy", "pandas",
+    # macOS autorisés
+    "AppKit", "Quartz", "Foundation", "CoreGraphics",
+    "pyautogui", "pyperclip",
+}
+
+# Patterns dangereux détectés statiquement (regex sur le code source)
+_DANGEROUS_PATTERNS = [
+    r"__import__\s*\(",
+    r"exec\s*\(",
+    r"eval\s*\(",
+    r"compile\s*\(",
+    r"globals\s*\(\s*\)\s*\[",
+    r"locals\s*\(\s*\)\s*\[",
+    r"getattr\s*\(.*__",
+    r"setattr\s*\(.*__",
+    r"open\s*\([^)]*['\"]w['\"]",       # écriture fichiers hors workspace
+    r"rm\s+-rf",
+    r"shutil\.rmtree",
+    r"os\.remove",
+    r"os\.unlink",
+    r"subprocess\.call\s*\(\s*[\'\"]rm",
+    r"fork\s*\(\s*\)",
+    r"while\s+True.*pass",              # boucle infinie naïve
+]
+
+import re as _re
+
+
+def _check_layer1_imports(code: str) -> tuple[bool, str]:
+    """Couche 1 — Whitelist des imports."""
+    try:
+        tree = ast.parse(code)
+    except SyntaxError as e:
+        return False, f"SyntaxError: {e}"
+
+    for node in ast.walk(tree):
+        if isinstance(node, (ast.Import, ast.ImportFrom)):
+            names = []
+            if isinstance(node, ast.Import):
+                names = [alias.name.split('.')[0] for alias in node.names]
+            else:
+                names = [node.module.split('.')[0]] if node.module else []
+
+            for name in names:
+                if name and name not in _SKILL_IMPORT_WHITELIST:
+                    return False, f"Import non autorisé: '{name}'"
+
+    return True, "OK"
+
+
+def _check_layer2_ast(code: str) -> tuple[bool, str]:
+    """Couche 2 — Analyse AST pour patterns dangereux."""
+    for pattern in _DANGEROUS_PATTERNS:
+        if _re.search(pattern, code):
+            return False, f"Pattern dangereux détecté: {pattern}"
+
+    # Vérifier les accès à __builtins__, __class__, etc.
+    try:
+        tree = ast.parse(code)
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Attribute) and node.attr.startswith('__') and node.attr.endswith('__'):
+                if node.attr not in ('__name__', '__doc__', '__file__', '__version__', '__all__'):
+                    return False, f"Accès dunder non autorisé: {node.attr}"
+    except Exception:
+        pass
+
+    return True, "OK"
+
+
+def _check_layer3_syntax(code: str) -> tuple[bool, str]:
+    """Couche 3 — Validation syntaxe complète + structure attendue."""
+    try:
+        ast.parse(code)
+    except SyntaxError as e:
+        return False, f"SyntaxError ligne {e.lineno}: {e.msg}"
+
+    # Le skill doit définir au moins une fonction
+    tree = ast.parse(code)
+    functions = [n for n in ast.walk(tree) if isinstance(n, ast.FunctionDef)]
+    if not functions:
+        return False, "Le skill doit définir au moins une fonction"
+
+    return True, "OK"
+
+
+def _worker_execute(code: str, func_name: str, params: dict, result_queue: multiprocessing.Queue):
+    """Exécuté dans un sous-processus isolé — Couche 4."""
+    try:
+        # Limites ressources
+        try:
+            resource.setrlimit(resource.RLIMIT_CPU, (5, 5))        # 5s CPU max
+            resource.setrlimit(resource.RLIMIT_AS, (512 * 1024 * 1024, 512 * 1024 * 1024))  # 512MB RAM max
+        except Exception:
+            pass  # resource peut échouer sur macOS — pas bloquant
+
+        namespace = {}
+        exec(compile(code, '<skill>', 'exec'), namespace)
+
+        func = namespace.get(func_name)
+        if not callable(func):
+            result_queue.put({"ok": False, "error": f"Fonction '{func_name}' introuvable"})
+            return
+
+        import inspect
+        if inspect.iscoroutinefunction(func):
+            import asyncio
+            result = asyncio.run(func(**params))
+        else:
+            result = func(**params)
+
+        result_queue.put({"ok": True, "result": str(result)[:2000]})
+    except Exception as e:
+        result_queue.put({"ok": False, "error": str(e)[:500]})
+
+
+def _check_layer4_subprocess(code: str, func_name: str = "run", params: dict = None) -> tuple[bool, str, any]:
+    """Couche 4 — Exécution isolée dans un sous-processus avec timeout."""
+    if params is None:
+        params = {}
+
+    result_queue = multiprocessing.Queue()
+    proc = multiprocessing.Process(
+        target=_worker_execute,
+        args=(code, func_name, params, result_queue),
+        daemon=True,
+    )
+    proc.start()
+    proc.join(timeout=10)  # 10s max
+
+    if proc.is_alive():
+        proc.terminate()
+        proc.join(1)
+        return False, "Timeout (>10s) — skill trop lent ou boucle infinie", None
+
+    if proc.exitcode != 0:
+        return False, f"Processus terminé avec code {proc.exitcode}", None
+
+    if result_queue.empty():
+        return False, "Aucun résultat retourné", None
+
+    result = result_queue.get_nowait()
+    if result.get("ok"):
+        return True, "OK", result.get("result")
+    return False, result.get("error", "Erreur inconnue"), None
+
+
+def _check_layer5_output(result: any, expected_type: str = "any") -> tuple[bool, str]:
+    """Couche 5 — Validation de l'output (type, taille, contenu)."""
+    if result is None:
+        return True, "OK (None result)"  # None est accepté
+
+    result_str = str(result)
+
+    # Limite taille output
+    if len(result_str) > 50000:
+        return False, f"Output trop grand: {len(result_str)} chars (max 50k)"
+
+    # Pas de données sensibles en output
+    sensitive_patterns = [r'\bsk-[a-zA-Z0-9]{20,}\b', r'\bghp_[a-zA-Z0-9]{20,}\b']
+    for pat in sensitive_patterns:
+        if _re.search(pat, result_str):
+            return False, "Output contient une clé API — refusé"
+
+    return True, "OK"
+
+
+async def validate_skill_code(
+    code: str,
+    func_name: str = "run",
+    test_params: dict = None,
+    run_test: bool = True,
+) -> dict:
+    """
+    Valide un skill auto-généré à travers les 5 couches de sécurité.
+
+    Returns:
+        {
+            "valid": bool,
+            "layers": {1: "OK", 2: "OK", ...},  # résultat par couche
+            "failed_layer": int | None,
+            "error": str | None,
+            "test_result": str | None,
+        }
+    """
+    try:
+        layers = {}
+
+        # Couche 1 — Imports
+        ok, msg = _check_layer1_imports(code)
+        layers[1] = msg
+        if not ok:
+            return {"valid": False, "layers": layers, "failed_layer": 1, "error": msg, "test_result": None}
+
+        # Couche 2 — AST patterns
+        ok, msg = _check_layer2_ast(code)
+        layers[2] = msg
+        if not ok:
+            return {"valid": False, "layers": layers, "failed_layer": 2, "error": msg, "test_result": None}
+
+        # Couche 3 — Syntaxe + structure
+        ok, msg = _check_layer3_syntax(code)
+        layers[3] = msg
+        if not ok:
+            return {"valid": False, "layers": layers, "failed_layer": 3, "error": msg, "test_result": None}
+
+        # Couche 4 — Subprocess isolé
+        if run_test:
+            ok, msg, result = _check_layer4_subprocess(code, func_name, test_params or {})
+            layers[4] = msg
+            if not ok:
+                return {"valid": False, "layers": layers, "failed_layer": 4, "error": msg, "test_result": None}
+
+            # Couche 5 — Validation output
+            ok, msg = _check_layer5_output(result)
+            layers[5] = msg
+            if not ok:
+                return {"valid": False, "layers": layers, "failed_layer": 5, "error": msg, "test_result": str(result)[:200]}
+        else:
+            layers[4] = "skipped"
+            layers[5] = "skipped"
+            result = None
+
+        return {
+            "valid": True,
+            "layers": layers,
+            "failed_layer": None,
+            "error": None,
+            "test_result": str(result)[:500] if result is not None else None,
+        }
+    except Exception as e:
+        return {
+            "valid": False,
+            "layers": {},
+            "failed_layer": None,
+            "error": f"Erreur inattendue dans validate_skill_code: {e}",
+            "test_result": None,
+        }
+
 # ─── Locks et executor ────────────────────────────────────────────────────────
 _SKILL_LOCKS: dict[str, asyncio.Lock] = {}
 _REGISTRY_LOCK = asyncio.Lock()
@@ -134,6 +388,44 @@ def _read_registry() -> dict:
         return json.loads(REGISTRY_FILE.read_text(encoding="utf-8"))
     except Exception:
         return {"skills": []}
+
+
+async def _publish_to_reine(name: str) -> None:
+    """Publie un skill vers le hub de la Reine (fire-and-forget, silencieux en cas d'échec)."""
+    reine_url = os.getenv("REINE_URL", "").rstrip("/")
+    if not reine_url:
+        return  # Cette machine est la Reine — le hub est local
+
+    skill_file    = SKILLS_NODE_DIR / name / "skill.js"
+    manifest_file = SKILLS_NODE_DIR / name / "manifest.json"
+    if not skill_file.exists():
+        return
+
+    try:
+        code     = skill_file.read_text("utf-8")
+        manifest = json.loads(manifest_file.read_text("utf-8")) if manifest_file.exists() else {}
+        machine_id = os.getenv("MACHINE_ID") or __import__("hashlib").sha256(
+            f"{__import__('socket').gethostname()}-{__import__('uuid').getnode()}".encode()
+        ).hexdigest()[:16]
+
+        async with httpx.AsyncClient(timeout=15) as client:
+            r = await client.post(
+                f"{reine_url}/api/v1/hub/skills/publish",
+                json={
+                    "name":       name,
+                    "version":    manifest.get("version", "1.0.0"),
+                    "code":       code,
+                    "manifest":   manifest,
+                    "machine_id": machine_id,
+                    "ruche_id":   os.getenv("RUCHE_ID", f"ruche-{machine_id[:8]}"),
+                },
+            )
+            if r.status_code == 200:
+                print(f"[Evolution] ↑ Publié sur Reine: {name}")
+            else:
+                print(f"[Evolution] Publication Reine refusée ({r.status_code}): {r.text[:100]}")
+    except Exception as e:
+        print(f"[Evolution] Erreur publication Reine pour {name}: {e}")
 
 
 def _read_metrics() -> dict:
@@ -280,6 +572,20 @@ async def generate_skill(name: str, goal: str, examples: List[dict] = []) -> dic
             }
         )
     code = r.json().get("content", "").replace("```python", "").replace("```", "").strip()
+
+    # ── Validation 5 couches avant sauvegarde ────────────────────────────
+    validation = await validate_skill_code(
+        code=code,
+        func_name="run",
+        run_test=False,  # Test statique uniquement (pas d'exécution en production par défaut)
+    )
+    if not validation["valid"]:
+        return {
+            "success": False,
+            "error": f"Skill rejeté couche {validation['failed_layer']}: {validation['error']}",
+            "validation": validation,
+        }
+
     skill_file = SKILLS_PY_DIR / f"{name}.py"
     async with _skill_lock(name):
         skill_file.write_text(code)
@@ -386,6 +692,9 @@ async def generate_skill_node(
         "syntax_ok":  syntax_ok,
         "version":    "1.0.0",
     })
+
+    # Publication automatique vers le hub de la Reine (fire-and-forget)
+    asyncio.create_task(_publish_to_reine(name))
 
     return {
         "created":      True,
@@ -575,6 +884,9 @@ async def evolve_existing_skill(name: str, reason: str = "amélioration généra
         "backup":       str(backup_file),
     })
 
+    # Publication automatique vers le hub de la Reine (fire-and-forget)
+    asyncio.create_task(_publish_to_reine(name))
+
     return {
         "evolved":      True,
         "skill":        name,
@@ -752,7 +1064,26 @@ class SelfRepairLoopRequest(BaseModel):
     max_iterations: int = 3
 
 
+class ValidateSkillRequest(BaseModel):
+    code: str
+    func_name: str = "run"
+    test_params: dict = {}
+    run_test: bool = False  # True = exécuter en sandbox
+
+
 # ─── Endpoints ────────────────────────────────────────────────────────────────
+
+@app.post("/validate_skill_code")
+async def validate_skill_code_endpoint(req: ValidateSkillRequest):
+    """Valide du code Python à travers les 5 couches de sécurité."""
+    result = await validate_skill_code(
+        code=req.code,
+        func_name=req.func_name,
+        test_params=req.test_params,
+        run_test=req.run_test,
+    )
+    return result
+
 
 @app.post("/repair")
 async def repair(req: RepairRequest):
