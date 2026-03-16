@@ -13,6 +13,7 @@ const NAV_ITEMS = [
   { id: "planner",      icon: "🗺️", label: "Planner" },
   { id: "learner",      icon: "🎓", label: "Apprentissage", badge: "NEW" },
   { id: "hitl",         icon: "🔴", label: "HITL",           badge: "NEW" },
+  { id: "pipeline",     icon: "🔗", label: "Pipelines",      badge: "NEW" },
   { id: "observability",icon: "🔭", label: "Observabilité" },
   { id: "agents",       icon: "🤖", label: "Agents" },
   { id: "skills",       icon: "🔧", label: "Skills" },

@@ -2642,6 +2642,81 @@ async def goals_health():
     return await _proxy_goals("GET", "/health")
 
 
+# ─── Pipeline proxy endpoints (/pipeline/*  →  pipeline.py :8011) ────────────
+
+PIPELINE_URL = "http://localhost:8011"
+
+
+async def _proxy_pipeline(method: str, path: str, body: Any = None, params: dict = None) -> dict:
+    """Helper pour proxier vers le service Pipeline :8011."""
+    try:
+        async with httpx.AsyncClient(timeout=120) as c:
+            if method == "GET":
+                r = await c.get(f"{PIPELINE_URL}{path}", params=params or {})
+            elif method == "POST":
+                r = await c.post(f"{PIPELINE_URL}{path}", json=body or {}, params=params or {})
+            elif method == "DELETE":
+                r = await c.delete(f"{PIPELINE_URL}{path}")
+            else:
+                return {"error": f"Méthode non supportée: {method}"}
+            r.raise_for_status()
+            return r.json()
+    except httpx.ConnectError:
+        return {"error": "Pipeline service inaccessible (port 8011)"}
+    except Exception as e:
+        return {"error": str(e)}
+
+
+@app.post("/pipeline/pipelines")
+async def pipeline_create(req: dict):
+    return await _proxy_pipeline("POST", "/pipelines", req)
+
+
+@app.get("/pipeline/pipelines")
+async def pipeline_list(limit: int = Query(50)):
+    return await _proxy_pipeline("GET", "/pipelines", params={"limit": limit})
+
+
+@app.get("/pipeline/templates")
+async def pipeline_templates():
+    return await _proxy_pipeline("GET", "/pipelines/templates")
+
+
+@app.get("/pipeline/pipelines/{pipeline_id}")
+async def pipeline_detail(pipeline_id: str):
+    return await _proxy_pipeline("GET", f"/pipelines/{pipeline_id}")
+
+
+@app.delete("/pipeline/pipelines/{pipeline_id}")
+async def pipeline_delete(pipeline_id: str):
+    return await _proxy_pipeline("DELETE", f"/pipelines/{pipeline_id}")
+
+
+@app.post("/pipeline/pipelines/{pipeline_id}/run")
+async def pipeline_run(pipeline_id: str, req: dict):
+    return await _proxy_pipeline("POST", f"/pipelines/{pipeline_id}/run", req)
+
+
+@app.get("/pipeline/runs")
+async def pipeline_runs(limit: int = Query(30)):
+    return await _proxy_pipeline("GET", "/runs", params={"limit": limit})
+
+
+@app.get("/pipeline/runs/{run_id}")
+async def pipeline_run_detail(run_id: str):
+    return await _proxy_pipeline("GET", f"/runs/{run_id}")
+
+
+@app.get("/pipeline/stats")
+async def pipeline_stats():
+    return await _proxy_pipeline("GET", "/stats")
+
+
+@app.get("/pipeline/health")
+async def pipeline_health():
+    return await _proxy_pipeline("GET", "/health")
+
+
 @app.post("/raw")
 async def raw_llm(req: dict):
     result = await llm(
