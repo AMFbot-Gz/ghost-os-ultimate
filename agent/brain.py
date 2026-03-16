@@ -2512,6 +2512,59 @@ async def planner_health():
     return await _proxy_planner("GET", "/health")
 
 
+# ─── Learner proxy endpoints (/learner/*  →  learner.py :8009) ───────────────
+
+LEARNER_URL = "http://localhost:8009"
+
+
+async def _proxy_learner(method: str, path: str, body: Any = None, params: dict = None) -> dict:
+    """Helper pour proxier vers le service Learner :8009."""
+    try:
+        async with httpx.AsyncClient(timeout=120) as c:
+            if method == "GET":
+                r = await c.get(f"{LEARNER_URL}{path}", params=params or {})
+            elif method == "POST":
+                r = await c.post(f"{LEARNER_URL}{path}", json=body or {}, params=params or {})
+            else:
+                return {"error": f"Méthode non supportée: {method}"}
+            r.raise_for_status()
+            return r.json()
+    except httpx.ConnectError:
+        return {"error": "Learner service inaccessible (port 8009)"}
+    except Exception as e:
+        return {"error": str(e)}
+
+
+@app.post("/learner/learn")
+async def learner_learn_one(req: dict):
+    return await _proxy_learner("POST", "/learn", req)
+
+
+@app.post("/learner/batch")
+async def learner_batch(req: dict):
+    return await _proxy_learner("POST", "/learn/batch", req)
+
+
+@app.get("/learner/skills")
+async def learner_skills():
+    return await _proxy_learner("GET", "/learned-skills")
+
+
+@app.get("/learner/stats")
+async def learner_stats():
+    return await _proxy_learner("GET", "/learning-stats")
+
+
+@app.post("/learner/trigger")
+async def learner_trigger(req: dict = {}):
+    return await _proxy_learner("POST", "/learn/trigger", req)
+
+
+@app.get("/learner/health")
+async def learner_health():
+    return await _proxy_learner("GET", "/health")
+
+
 @app.post("/raw")
 async def raw_llm(req: dict):
     result = await llm(
