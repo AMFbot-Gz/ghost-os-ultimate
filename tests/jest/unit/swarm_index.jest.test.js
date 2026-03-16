@@ -17,7 +17,7 @@ global.fetch = jest.fn().mockResolvedValue({
 });
 
 // ─── Import du module swarm/index.js ─────────────────────────────────────────
-const swarmModule = await import('../../src/swarm/index.js');
+const swarmModule = await import('../../../src/swarm/index.js');
 
 // ─── Tests ────────────────────────────────────────────────────────────────────
 

@@ -4,7 +4,7 @@
  * Vérifie que les règles regex matchent correctement sans appel LLM.
  */
 import { jest } from '@jest/globals';
-import { routeByRules, isActionIntent } from '../../src/agents/intentRouter.js';
+import { routeByRules, isActionIntent } from '../../../src/agents/intentRouter.js';
 
 describe('intentRouter — routeur déterministe', () => {
 

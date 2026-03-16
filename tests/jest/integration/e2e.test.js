@@ -12,7 +12,7 @@ import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const ROOT = join(__dirname, '../..');
+const ROOT = join(__dirname, '../../..');
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Test 1 : WorldModel ↔ world_state.json
@@ -81,7 +81,7 @@ print(json.dumps({'app': app}))
 
 describe('Integration: Security', () => {
   test('run_command bloque les commandes dangereuses', async () => {
-    const { routeByRules } = await import('../../src/agents/intentRouter.js');
+    const { routeByRules } = await import('../../../src/agents/intentRouter.js');
 
     // Commande dangereuse : rm -rf /
     const dangerous = routeByRules('exécute rm -rf /');
@@ -97,7 +97,7 @@ describe('Integration: Security', () => {
   });
 
   test('run_command autorise git status normalement', async () => {
-    const { routeByRules } = await import('../../src/agents/intentRouter.js');
+    const { routeByRules } = await import('../../../src/agents/intentRouter.js');
 
     const safe = routeByRules('exécute git status');
     // git status peut matcher via la règle git ou la règle exécute
@@ -250,7 +250,7 @@ describe('Integration: CreditSystem', () => {
       _resetAll,
       INITIAL_CREDITS,
       CREDIT_PER_SKILL,
-    } = await import('../../src/market/creditSystem.js');
+    } = await import('../../../src/market/creditSystem.js');
 
     const agentId = 'test_integration_agent_' + Date.now();
 

@@ -14,8 +14,8 @@ global.fetch = jest.fn().mockResolvedValue({
 });
 
 // ─── Imports après mock ───────────────────────────────────────────────────────
-const { nodeRegistry } = await import('../../src/swarm/nodeRegistry.js');
-const { selectNode } = await import('../../src/swarm/nodeRouter.js');
+const { nodeRegistry } = await import('../../../src/swarm/nodeRegistry.js');
+const { selectNode } = await import('../../../src/swarm/nodeRouter.js');
 
 // Initialisation avant les tests
 beforeAll(async () => {

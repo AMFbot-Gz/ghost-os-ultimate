@@ -12,7 +12,7 @@ mkdirSync(TEST_DATA, { recursive: true });
 
 // Mock le module fs pour pointer vers TEST_DATA
 // On teste via les fonctions directement avec data dir réel
-import { learn, recall, memoryStats, forget } from '../../src/learning/missionMemory.js';
+import { learn, recall, memoryStats, forget } from '../../../src/learning/missionMemory.js';
 
 describe('missionMemory', () => {
   beforeEach(() => {

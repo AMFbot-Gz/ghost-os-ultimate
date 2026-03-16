@@ -35,7 +35,7 @@ console.log(chalk.hex("#F5A623").bold("\n🐝 LaRuche — Tests Unitaires\n"));
 // ─── 1. safeParseJSON ────────────────────────────────────────────────────────
 console.log(chalk.bold("  safeParseJSON"));
 
-const { safeParseJSON } = await import("../../src/utils.js");
+const { safeParseJSON } = await import("../../../src/utils.js");
 
 await test("Parse JSON simple", async () => {
   const r = safeParseJSON('{"a":1}', null);
@@ -82,7 +82,7 @@ mkdirSync(TMP_DIR, { recursive: true });
 const tmpFile = join(TMP_DIR, `missions_test_${Date.now()}.json`);
 
 await test("Pas de fichier .tmp résiduel après écriture", async () => {
-  const { saveMission } = await import("../../src/utils.js");
+  const { saveMission } = await import("../../../src/utils.js");
   // saveMission utilise MISSIONS_FILE en dur — on vérifie juste qu'aucun .tmp ne reste
   const tmpPath = `${join(ROOT, ".laruche/missions.json")}.tmp`;
   saveMission({ id: "test-atomic", command: "test", status: "success", ts: new Date().toISOString() });
@@ -92,7 +92,7 @@ await test("Pas de fichier .tmp résiduel après écriture", async () => {
 });
 
 await test("Fichier missions.json valide après écriture concurrente (x5)", async () => {
-  const { saveMission } = await import("../../src/utils.js");
+  const { saveMission } = await import("../../../src/utils.js");
   const promises = Array.from({ length: 5 }, (_, i) =>
     Promise.resolve(saveMission({ id: `conc-${i}`, command: `cmd-${i}`, status: "success", ts: new Date().toISOString() }))
   );
@@ -104,7 +104,7 @@ await test("Fichier missions.json valide après écriture concurrente (x5)", asy
 });
 
 await test("Max 200 missions gardées", async () => {
-  const { saveMission, loadMissions } = await import("../../src/utils.js");
+  const { saveMission, loadMissions } = await import("../../../src/utils.js");
   // Insérer 10 de plus (déjà au-dessus de 200 ou pas)
   for (let i = 0; i < 10; i++) {
     saveMission({ id: `limit-${i}`, command: `cmd`, status: "success", ts: new Date().toISOString() });
@@ -166,7 +166,7 @@ if (serverAvailable) {
 // ─── 4. Stuck Missions ───────────────────────────────────────────────────────
 console.log(chalk.bold("\n  Stuck Missions (expiration)"));
 
-const { activeMissions, createMissionEntry, updateMission } = await import("../../src/api/missions.js");
+const { activeMissions, createMissionEntry, updateMission } = await import("../../../src/api/missions.js");
 
 await test("Mission pending depuis > STUCK_TIMEOUT → pas encore expirée (< 1s)", async () => {
   const entry = createMissionEntry("test stuck fresh");
@@ -189,7 +189,7 @@ await test("updateMission patch le statut correctement", async () => {
 });
 
 await test("appendMissionEvent ajoute avec timestamp", async () => {
-  const { appendMissionEvent } = await import("../../src/api/missions.js");
+  const { appendMissionEvent } = await import("../../../src/api/missions.js");
   const entry = createMissionEntry("test events");
   appendMissionEvent(entry.id, { type: "thinking", agent: "strategist" });
   appendMissionEvent(entry.id, { type: "plan_ready", tasks: 3 });
@@ -208,7 +208,7 @@ await test("Mission inconnue → updateMission sans crash", async () => {
 // ─── 5. Model Router Cache ───────────────────────────────────────────────────
 console.log(chalk.bold("\n  Model Router"));
 
-const { getAvailableModels } = await import("../../src/model_router.js");
+const { getAvailableModels } = await import("../../../src/model_router.js");
 
 await test("getAvailableModels() x10 parallèle — un seul fetch (inflight dedup)", async () => {
   // Forcer cache expiré en manipulant (pas d'accès direct) — on appelle 10× et mesure le temps

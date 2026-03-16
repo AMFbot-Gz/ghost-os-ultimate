@@ -4,7 +4,7 @@
 
 let safeParseJSON;
 beforeAll(async () => {
-  const m = await import("../../src/utils.js");
+  const m = await import("../../../src/utils.js");
   safeParseJSON = m.safeParseJSON;
 });
 

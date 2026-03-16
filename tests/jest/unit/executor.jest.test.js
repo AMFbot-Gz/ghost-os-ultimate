@@ -5,14 +5,14 @@ import { jest } from '@jest/globals';
 
 describe('executor', () => {
   test('executeStep retourne erreur si skill inconnu', async () => {
-    const { executeStep } = await import('../../src/agents/executor.js');
+    const { executeStep } = await import('../../../src/agents/executor.js');
     const result = await executeStep({ skill: 'skill_inexistant_xyz', params: {} }, {});
     expect(result.success).toBe(false);
     expect(result.error).toMatch(/Skill|introuvable|not found/i);
   });
 
   test('executeStep timeout après délai max', async () => {
-    const { executeStep } = await import('../../src/agents/executor.js');
+    const { executeStep } = await import('../../../src/agents/executor.js');
     // Mock un skill qui ne répond jamais
     const slowStep = {
       skill: '__test_timeout__',
@@ -26,7 +26,7 @@ describe('executor', () => {
   // ── executeSequence ────────────────────────────────────────────────────────────
 
   test('executeSequence vide → success true, 0 steps', async () => {
-    const { executeSequence } = await import('../../src/agents/executor.js');
+    const { executeSequence } = await import('../../../src/agents/executor.js');
     const result = await executeSequence([]);
     expect(result.success).toBe(true);
     expect(result.results).toHaveLength(0);
@@ -35,7 +35,7 @@ describe('executor', () => {
   });
 
   test('executeSequence tous échecs → success false, status "failed"', async () => {
-    const { executeSequence } = await import('../../src/agents/executor.js');
+    const { executeSequence } = await import('../../../src/agents/executor.js');
 
     // Deux skills inexistants — garantis de retourner success: false
     const steps = [
@@ -53,7 +53,7 @@ describe('executor', () => {
   }, 15000);
 
   test('executeSequence steps mixtes (succès + échec) → success false, completedSteps partiel', async () => {
-    const { executeSequence, executeStep } = await import('../../src/agents/executor.js');
+    const { executeSequence, executeStep } = await import('../../../src/agents/executor.js');
 
     // On utilise un mock partiel : 1 step inconnu (échoue) + 1 step inconnu (échoue aussi)
     // mais on veut tester le comportement "partial" : certains passent, d'autres non.
@@ -78,7 +78,7 @@ describe('executor', () => {
   }, 15000);
 
   test('executeSequence stopOnError=true s\'arrête après le premier échec', async () => {
-    const { executeSequence } = await import('../../src/agents/executor.js');
+    const { executeSequence } = await import('../../../src/agents/executor.js');
 
     const steps = [
       { skill: '__inexistant_stop__', params: {} },
@@ -93,14 +93,14 @@ describe('executor', () => {
   }, 15000);
 
   test('executeSequence retourne duration en ms', async () => {
-    const { executeSequence } = await import('../../src/agents/executor.js');
+    const { executeSequence } = await import('../../../src/agents/executor.js');
     const result = await executeSequence([]);
     expect(typeof result.duration).toBe('number');
     expect(result.duration).toBeGreaterThanOrEqual(0);
   });
 
   test('executeSequence résultats contiennent success et step', async () => {
-    const { executeSequence } = await import('../../src/agents/executor.js');
+    const { executeSequence } = await import('../../../src/agents/executor.js');
     const steps = [
       { skill: '__inexistant_c__', params: {} },
     ];

@@ -34,7 +34,7 @@ console.log(chalk.hex("#F5A623").bold("\n🐝 LaRuche — Tests MCP Routes\n"));
 // ─── Import direct des handlers internes ─────────────────────────────────────
 // On teste via un Hono app minimal (pas de server HTTP — juste app.fetch())
 import { Hono } from "hono";
-import { createMcpRoutes } from "../../src/api/mcp_routes.js";
+import { createMcpRoutes } from "../../../src/api/mcp_routes.js";
 
 const app = new Hono();
 createMcpRoutes(app);

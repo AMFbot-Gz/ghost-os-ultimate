@@ -4,13 +4,23 @@
  */
 
 import { existsSync, readFileSync, writeFileSync, mkdirSync, readdirSync, statSync } from "fs";
-import { join, dirname } from "path";
-import { fileURLToPath } from "url";
+import { join, dirname, resolve } from "path";
+import { pathToFileURL, fileURLToPath } from "url";
 import { ask } from "./model_router.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(__dirname, "..");
 const SKILLS_DIR = join(ROOT, "skills");
+
+/**
+ * Import dynamique avec cache busting par mtime.
+ * Garantit que les skills mis à jour (auto-évolution) sont rechargés sans redémarrage.
+ */
+async function importFresh(filePath) {
+  const mtime = statSync(filePath).mtimeMs;
+  const url = `${pathToFileURL(resolve(filePath)).href}?v=${mtime}`;
+  return import(url);
+}
 
 export async function runSkill(skillName, params = {}) {
   const skillDir = join(SKILLS_DIR, skillName);
@@ -20,7 +30,7 @@ export async function runSkill(skillName, params = {}) {
     throw new Error(`Skill "${skillName}" introuvable. Créez-le: laruche skill create "${skillName}"`);
   }
 
-  const { run } = await import(skillFile);
+  const { run } = await importFresh(skillFile);
   return await run(params);
 }
 

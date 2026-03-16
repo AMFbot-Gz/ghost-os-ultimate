@@ -5,8 +5,8 @@
  */
 
 import { jest } from '@jest/globals';
-import { analyzeRepo } from '../../src/selfdev/repoAnalyzer.js';
-import { generateSuggestions } from '../../src/selfdev/patchGenerator.js';
+import { analyzeRepo } from '../../../src/selfdev/repoAnalyzer.js';
+import { generateSuggestions } from '../../../src/selfdev/patchGenerator.js';
 import { mkdtempSync, writeFileSync, mkdirSync } from 'fs';
 import { join } from 'path';
 import { tmpdir } from 'os';

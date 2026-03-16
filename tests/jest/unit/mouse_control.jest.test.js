@@ -20,7 +20,7 @@ jest.unstable_mockModule("child_process", () => ({
 }));
 
 // ─── Import du skill après mock ───────────────────────────────────────────────
-const { run } = await import("../../skills/mouse_control/skill.js");
+const { run } = await import("../../../skills/mouse_control/skill.js");
 
 // ─── Tests ────────────────────────────────────────────────────────────────────
 

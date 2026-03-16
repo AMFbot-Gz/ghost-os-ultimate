@@ -16,3 +16,8 @@ export { selectNode, callOnNode } from './nodeRouter.js';
 export async function initSwarm() {
   await nodeRegistry.init();
 }
+
+/** Retourne les statistiques du swarm (total, up, down, totalCapacity, activeJobs). */
+export function getSwarmStats() {
+  return nodeRegistry.stats();
+}

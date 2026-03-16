@@ -10,7 +10,7 @@ global.fetch = jest.fn().mockResolvedValue({
   json: async () => ({ models: [{ name: "llama3.2:3b" }, { name: "llava:7b" }] }),
 });
 
-const { autoDetectRoles, route } = await import("../../src/model_router.js");
+const { autoDetectRoles, route } = await import("../../../src/model_router.js");
 
 describe("model_router", () => {
   test("autoDetectRoles retourne un objet avec les 6 rôles", async () => {

@@ -43,7 +43,7 @@ jest.unstable_mockModule('fs/promises', () => ({
 // Mock chimera_bus
 const mockReadCommand  = jest.fn().mockReturnValue(null);
 const mockMarkExecuted = jest.fn();
-jest.unstable_mockModule('../../core/chimera_bus.js', () => ({
+jest.unstable_mockModule('../../../core/chimera_bus.js', () => ({
   readCommand:    mockReadCommand,
   markExecuted:   mockMarkExecuted,
   writeCommand:   jest.fn(),

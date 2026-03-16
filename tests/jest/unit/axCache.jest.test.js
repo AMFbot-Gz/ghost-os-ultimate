@@ -5,7 +5,7 @@
  * Utilise la classe AXCache directement (pas le singleton) pour l'isolation.
  */
 
-import { AXCache, DEFAULT_TTL } from '../../src/perception/axCache.js';
+import { AXCache, DEFAULT_TTL } from '../../../src/perception/axCache.js';
 
 describe('AXCache', () => {
   let cache;

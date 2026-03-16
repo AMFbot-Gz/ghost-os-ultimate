@@ -5,8 +5,8 @@
  * et simulatePlan (avec/sans éléments connus).
  */
 
-import { recordElement, lookupElement, worldModelStats, forgetApp, _resetForTests } from '../../src/worldmodel/index.js';
-import { simulatePlan } from '../../src/worldmodel/simulator.js';
+import { recordElement, lookupElement, worldModelStats, forgetApp, _resetForTests } from '../../../src/worldmodel/index.js';
+import { simulatePlan } from '../../../src/worldmodel/simulator.js';
 
 // Réinitialise le modèle en RAM avant chaque test
 // pour garantir l'isolation (pas d'état partagé entre tests)

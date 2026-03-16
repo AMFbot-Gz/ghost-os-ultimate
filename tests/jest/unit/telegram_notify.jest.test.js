@@ -12,7 +12,7 @@ const mockFetch = jest.fn();
 global.fetch = mockFetch;
 
 // ─── Import du skill ──────────────────────────────────────────────────────────
-const { run } = await import('../../skills/telegram_notify/skill.js');
+const { run } = await import('../../../skills/telegram_notify/skill.js');
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 

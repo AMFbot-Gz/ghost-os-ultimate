@@ -13,9 +13,9 @@ import {
   GoalStatus,
   areDependenciesMet,
   _resetGoals,
-} from '../../src/temporal/goalGraph.js';
-import { nextMission, getSchedule } from '../../src/temporal/scheduler.js';
-import { calculatePriority } from '../../src/temporal/priorityEngine.js';
+} from '../../../src/temporal/goalGraph.js';
+import { nextMission, getSchedule } from '../../../src/temporal/scheduler.js';
+import { calculatePriority } from '../../../src/temporal/priorityEngine.js';
 
 // Réinitialise le DAG avant chaque test
 beforeEach(() => { _resetGoals(); });

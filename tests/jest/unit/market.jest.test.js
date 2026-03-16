@@ -7,9 +7,9 @@
 import { jest } from '@jest/globals';
 
 // ─── Imports ──────────────────────────────────────────────────────────────────
-const { runAuction } = await import('../../src/market/auctionEngine.js');
-const { recordOutcome, getReputation, _resetScores } = await import('../../src/market/reputationSystem.js');
-const { registerAgent, dispatchWithAuction, marketStats } = await import('../../src/market/agentMarket.js');
+const { runAuction } = await import('../../../src/market/auctionEngine.js');
+const { recordOutcome, getReputation, _resetScores } = await import('../../../src/market/reputationSystem.js');
+const { registerAgent, dispatchWithAuction, marketStats } = await import('../../../src/market/agentMarket.js');
 
 beforeEach(() => {
   _resetScores();

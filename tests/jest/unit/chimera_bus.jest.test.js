@@ -24,7 +24,7 @@ const mockFs = {
 jest.unstable_mockModule('fs', () => mockFs);
 
 // Import du module après le mock
-const { writeCommand, readCommand, markExecuted, getLastCommand } = await import('../../core/chimera_bus.js');
+const { writeCommand, readCommand, markExecuted, getLastCommand } = await import('../../../core/chimera_bus.js');
 
 const SECRET = process.env.CHIMERA_SECRET || 'pico-ruche-dev-secret';
 

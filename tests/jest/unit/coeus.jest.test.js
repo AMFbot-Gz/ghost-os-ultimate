@@ -40,7 +40,7 @@ jest.unstable_mockModule('fs/promises', () => ({
 
 // Mock creditSystem
 const mockGetAllBalances = jest.fn().mockReturnValue({});
-jest.unstable_mockModule('../../src/market/creditSystem.js', () => ({
+jest.unstable_mockModule('../../../src/market/creditSystem.js', () => ({
   getAllBalances:   mockGetAllBalances,
   CREDIT_PER_SKILL: 10,
   INITIAL_CREDITS:  1000,
@@ -48,7 +48,7 @@ jest.unstable_mockModule('../../src/market/creditSystem.js', () => ({
 
 // Mock chimera_bus
 const mockWriteCommand = jest.fn().mockReturnValue({ id: 'chim-mock-1' });
-jest.unstable_mockModule('../../core/chimera_bus.js', () => ({
+jest.unstable_mockModule('../../../core/chimera_bus.js', () => ({
   writeCommand:    mockWriteCommand,
   readCommand:     jest.fn().mockReturnValue(null),
   markExecuted:    jest.fn(),
@@ -63,7 +63,7 @@ const {
   createMutationTicket,
   processTicketApproval,
   getCoeusStats,
-} = await import('../../src/agents/coeus.js');
+} = await import('../../../src/agents/coeus.js');
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 

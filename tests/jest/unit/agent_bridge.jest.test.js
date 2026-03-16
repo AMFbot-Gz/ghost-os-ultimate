@@ -12,7 +12,7 @@ const mockFetch = jest.fn();
 global.fetch = mockFetch;
 
 // ─── Import du skill ──────────────────────────────────────────────────────────
-const { run } = await import('../../skills/agent_bridge/skill.js');
+const { run } = await import('../../../skills/agent_bridge/skill.js');
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 

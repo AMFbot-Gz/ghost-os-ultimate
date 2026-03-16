@@ -4,7 +4,7 @@
  * Tous les tests sont indépendants (chaque test crée sa propre instance MissionQueue).
  */
 import { jest } from '@jest/globals';
-import { MissionQueue } from '../../src/missionQueue.js';
+import { MissionQueue } from '../../../src/missionQueue.js';
 
 describe('MissionQueue', () => {
 

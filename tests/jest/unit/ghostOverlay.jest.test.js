@@ -27,7 +27,7 @@ await jest.unstable_mockModule('electron', () => ({
 }));
 
 // Import après le mock pour que Jest intercèpte electron
-const mod = await import('../../hud/src/ghost-overlay/ghostOverlay.mjs');
+const mod = await import('../../../interfaces/hud/src/ghost-overlay/ghostOverlay.mjs');
 
 // ─── Tests ────────────────────────────────────────────────────────────────────
 

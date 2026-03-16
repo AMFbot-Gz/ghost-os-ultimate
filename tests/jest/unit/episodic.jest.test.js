@@ -17,7 +17,7 @@ describe('episodic memory', () => {
     const dataDir = new URL('../../../data', import.meta.url).pathname;
     const episodesFile = join(dataDir, 'episodes_test_tmp.jsonl');
     // On importe le vrai module — il utilisera data/episodes.jsonl
-    const mod = await import('../../src/memory/episodic/index.js');
+    const mod = await import('../../../src/memory/episodic/index.js');
     storeEpisode = mod.storeEpisode;
     retrieveSimilarEpisodes = mod.retrieveSimilarEpisodes;
     episodeStats = mod.episodeStats;

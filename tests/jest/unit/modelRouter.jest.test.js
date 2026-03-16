@@ -41,7 +41,7 @@ global.fetch = jest.fn().mockImplementation((url, opts) => {
 
 // ── Import du module après mock ───────────────────────────────────────────────
 const { autoDetectRoles, route, ask, _setAvailableModelsCache } =
-  await import('../../src/model_router.js');
+  await import('../../../src/model_router.js');
 
 // Injecte le cache de modèles mock immédiatement
 _setAvailableModelsCache([

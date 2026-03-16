@@ -7,7 +7,7 @@ describe('failureDetector', () => {
   let detectFailureType, analyzeFailedMission, FailureType;
 
   beforeAll(async () => {
-    const mod = await import('../../src/evolution/failureDetector.js');
+    const mod = await import('../../../src/evolution/failureDetector.js');
     detectFailureType = mod.detectFailureType;
     analyzeFailedMission = mod.analyzeFailedMission;
     FailureType = mod.FailureType;
@@ -87,7 +87,7 @@ describe('skillRegistry', () => {
   let trackUsage, shouldImprove, bumpVersion, getAllStats;
 
   beforeAll(async () => {
-    const mod = await import('../../src/evolution/skillRegistry.js');
+    const mod = await import('../../../src/evolution/skillRegistry.js');
     trackUsage = mod.trackUsage;
     shouldImprove = mod.shouldImprove;
     bumpVersion = mod.bumpVersion;

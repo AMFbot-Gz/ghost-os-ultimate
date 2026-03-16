@@ -19,7 +19,7 @@ jest.unstable_mockModule("child_process", () => ({
 }));
 
 // ─── Import du skill après mock ───────────────────────────────────────────────
-const { run } = await import("../../skills/invoke_claude_code/skill.js");
+const { run } = await import("../../../skills/invoke_claude_code/skill.js");
 
 // ─── Tests ────────────────────────────────────────────────────────────────────
 

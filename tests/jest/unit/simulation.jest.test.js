@@ -5,9 +5,9 @@
  * les flags requiresConfirmation et la simulation de plans.
  */
 import { jest } from '@jest/globals';
-import { estimateRisk, RiskLevel } from '../../src/simulation/riskEstimator.js';
-import { simulate, simulatePlan } from '../../src/simulation/actionSimulator.js';
-import { updateDesktopState, getDesktopState, predictStateAfter } from '../../src/simulation/desktopModel.js';
+import { estimateRisk, RiskLevel } from '../../../src/simulation/riskEstimator.js';
+import { simulate, simulatePlan } from '../../../src/simulation/actionSimulator.js';
+import { updateDesktopState, getDesktopState, predictStateAfter } from '../../../src/simulation/desktopModel.js';
 
 // ─── estimateRisk ──────────────────────────────────────────────────────────────
 
