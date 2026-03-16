@@ -10,6 +10,7 @@ import os
 import time
 import uuid
 import subprocess
+from collections import deque
 from datetime import datetime
 from pathlib import Path
 from fastapi import FastAPI, Query
@@ -895,6 +896,223 @@ async def _emit(on_event: Optional[Callable], event: dict) -> None:
             pass
 
 
+async def _save_to_memory(result: dict, loop_type: str) -> None:
+    """Sauvegarde un résultat de boucle ReAct/ToT dans la mémoire vectorielle (memory.py :8006).
+    Silencieux — n'interrompt jamais la boucle principale.
+    """
+    try:
+        mission = (result.get("goal") or result.get("mission", ""))[:300]
+        if not mission:
+            return
+
+        if loop_type == "react":
+            result_text = (result.get("final_answer") or "")[:600]
+            success = result.get("status") == "success"
+            steps = result.get("steps_taken", 0)
+            learned = (
+                f"[ReAct] {steps} étape(s), provider={result.get('provider', '?')}, "
+                f"rollbacks={len(result.get('rollbacks', []))}"
+            )
+        else:  # tot
+            summary = result.get("solution_summary") or ""
+            plan    = result.get("execution_plan") or ""
+            result_text = (summary or plan)[:600]
+            success = result.get("status") in ("solution_found", "best_path")
+            nodes   = result.get("tree_stats", {}).get("total_nodes_explored", 0)
+            learned = (
+                f"[ToT] score={result.get('best_score', 0):.2f}, "
+                f"profondeur={result.get('path_depth', 0)}, noeuds={nodes}, "
+                f"provider={result.get('provider', '?')}"
+            )
+
+        if not result_text:
+            return
+
+        payload = {
+            "mission":    mission,
+            "result":     result_text,
+            "success":    success,
+            "duration_ms": result.get("duration_ms", 0),
+            "model_used": result.get("model", ""),
+            "skills_used": [],
+            "learned":    learned,
+        }
+        async with httpx.AsyncClient(timeout=8) as c:
+            r = await c.post(f"{MEMORY_URL}/episode", json=payload)
+            if r.status_code == 200:
+                print(f"[Brain/Memory] ✅ Épisode {loop_type} sauvegardé: {mission[:60]}")
+            else:
+                print(f"[Brain/Memory] ⚠️  Sauvegarde échouée: HTTP {r.status_code}")
+    except Exception as e:
+        print(f"[Brain/Memory] Sauvegarde silencieuse échouée: {e}")
+
+
+# ─── Observabilité temps réel ─────────────────────────────────────────────────
+# Ring buffer : 60 snapshots × 10s = 10 minutes d'historique
+_METRICS_HISTORY: deque = deque(maxlen=60)
+_METRICS_LOCK_OBS = asyncio.Lock()
+_NODE_QUEEN_URL = "http://localhost:3000"
+
+# Ports de toutes les couches Python
+_ALL_LAYER_PORTS = {
+    "queen":      _PORTS["queen"],
+    "perception": _PORTS["perception"],
+    "brain":      _PORTS["brain"],
+    "executor":   _PORTS["executor"],
+    "evolution":  _PORTS["evolution"],
+    "memory":     _PORTS["memory"],
+    "mcp_bridge": _PORTS["mcp_bridge"],
+}
+
+
+def _compute_alerts(layers: dict, system: dict) -> list:
+    """Génère la liste des alertes actives à partir d'un snapshot."""
+    alerts = []
+    cpu  = system.get("cpu_percent",  0)
+    ram  = system.get("ram_percent",  0)
+    disk = system.get("disk_percent", 0)
+
+    if cpu > 90:
+        alerts.append({"level": "critical", "message": f"CPU critique : {cpu}%",    "source": "system"})
+    elif cpu > 80:
+        alerts.append({"level": "warn",     "message": f"CPU élevé : {cpu}%",       "source": "system"})
+    if ram > 90:
+        alerts.append({"level": "critical", "message": f"RAM critique : {ram}%",    "source": "system"})
+    elif ram > 80:
+        alerts.append({"level": "warn",     "message": f"RAM élevée : {ram}%",      "source": "system"})
+    if disk > 90:
+        alerts.append({"level": "critical", "message": f"Disque plein : {disk}%",   "source": "system"})
+    elif disk > 80:
+        alerts.append({"level": "warn",     "message": f"Disque chargé : {disk}%",  "source": "system"})
+
+    # Couches hors ligne
+    for name, data in layers.items():
+        if not data.get("ok"):
+            err = data.get("error", f"HTTP {data.get('status_code', '?')}")
+            alerts.append({"level": "critical", "message": f"Couche {name} hors ligne ({err})", "source": name})
+        elif data.get("latency_ms", 0) > 2000:
+            alerts.append({"level": "warn", "message": f"Latence élevée {name} : {data['latency_ms']}ms", "source": name})
+
+    # ChromaDB dégradé
+    mem = layers.get("memory", {})
+    if mem.get("ok") and not mem.get("chroma_ready"):
+        alerts.append({"level": "info", "message": "ChromaDB inactif — recherche sémantique dégradée", "source": "memory"})
+
+    # Circuit breakers ouverts (brain)
+    brain_layer = layers.get("brain", {})
+    for provider, cb in brain_layer.get("circuit_breakers", {}).items():
+        if cb.get("open"):
+            alerts.append({"level": "warn", "message": f"Circuit breaker ouvert : {provider}", "source": "brain"})
+
+    return alerts
+
+
+async def _collect_snapshot() -> dict:
+    """Collecte un snapshot complet en parallèle : 7 couches Python + Node system/status."""
+    t_snap = time.time()
+
+    # ── Poll couches Python en parallèle ──────────────────────────────────
+    async def _poll(name: str, port: int) -> tuple:
+        t0 = time.time()
+        try:
+            async with httpx.AsyncClient(timeout=3) as c:
+                r = await c.get(f"http://localhost:{port}/health")
+                lat = int((time.time() - t0) * 1000)
+                if r.status_code == 200:
+                    return name, {"ok": True, "latency_ms": lat, **r.json()}
+                return name, {"ok": False, "latency_ms": lat, "status_code": r.status_code}
+        except Exception as e:
+            return name, {"ok": False, "latency_ms": int((time.time() - t0) * 1000), "error": str(e)[:80]}
+
+    raw_layers = await asyncio.gather(
+        *[_poll(n, p) for n, p in _ALL_LAYER_PORTS.items()],
+        return_exceptions=True,
+    )
+    layers = {}
+    for item in raw_layers:
+        if isinstance(item, tuple):
+            layers[item[0]] = item[1]
+
+    # ── Node.js queen : system + status ───────────────────────────────────
+    system   = {}
+    missions = {}
+    ollama   = {}
+    chimera  = os.environ.get("CHIMERA_SECRET", "")
+    hdrs = {"Authorization": f"Bearer {chimera}"} if chimera else {}
+    try:
+        async with httpx.AsyncClient(timeout=3) as c:
+            sys_r, sta_r = await asyncio.gather(
+                c.get(f"{_NODE_QUEEN_URL}/api/system",  headers=hdrs),
+                c.get(f"{_NODE_QUEEN_URL}/api/status",  headers=hdrs),
+                return_exceptions=True,
+            )
+        if not isinstance(sys_r, Exception) and sys_r.status_code == 200:
+            d = sys_r.json()
+            mem = d.get("memory", {})
+            disk_list = d.get("disk", [{}])
+            system = {
+                "cpu_percent":  round(d.get("cpu",    {}).get("load",    0), 1),
+                "ram_percent":  round(mem.get("percent", 0), 1),
+                "ram_gb_used":  round(mem.get("used",  0) / 1e9, 1),
+                "ram_gb_total": round(mem.get("total", 0) / 1e9, 1),
+                "disk_percent": round(disk_list[0].get("percent", 0), 1) if disk_list else 0,
+                "disk_gb_used": round(disk_list[0].get("used",    0) / 1e9, 1) if disk_list else 0,
+                "disk_gb_total":round(disk_list[0].get("size",    0) / 1e9, 1) if disk_list else 0,
+            }
+        if not isinstance(sta_r, Exception) and sta_r.status_code == 200:
+            d = sta_r.json()
+            missions = {
+                "total":   d.get("missions", {}).get("total",  0),
+                "active":  d.get("missions", {}).get("active", 0),
+                "success": d.get("missions", {}).get("success",0),
+                "error":   d.get("missions", {}).get("error",  0),
+            }
+            ollama = {
+                "ok":        d.get("ollama", {}).get("ok",        False),
+                "latency_ms":d.get("ollama", {}).get("latencyMs", None),
+                "model":     d.get("ollama", {}).get("model",     ""),
+            }
+    except Exception:
+        pass
+
+    alerts = _compute_alerts(layers, system)
+
+    snapshot = {
+        "timestamp":     t_snap,
+        "layers":        layers,
+        "system":        system,
+        "missions":      missions,
+        "ollama":        ollama,
+        "alerts":        alerts,
+        "alerts_count":  len(alerts),
+        "layers_ok":     sum(1 for v in layers.values() if v.get("ok", False)),
+        "layers_total":  len(_ALL_LAYER_PORTS),
+        "collect_ms":    int((time.time() - t_snap) * 1000),
+    }
+
+    async with _METRICS_LOCK_OBS:
+        _METRICS_HISTORY.append(snapshot)
+
+    return snapshot
+
+
+async def _metrics_poller_loop() -> None:
+    """Tâche background — collecte un snapshot toutes les 10 secondes."""
+    print("[Brain/Obs] 🔭 Démarrage poller métriques (10s)")
+    await asyncio.sleep(5)  # attendre que les autres couches démarrent
+    while True:
+        try:
+            await _collect_snapshot()
+        except Exception as e:
+            print(f"[Brain/Obs] Erreur collecte: {e}")
+        await asyncio.sleep(10)
+
+
+@app.on_event("startup")
+async def _start_obs_poller():
+    asyncio.create_task(_metrics_poller_loop())
+
+
 async def react_loop(
     mission: str,
     max_steps: int = 15,
@@ -913,10 +1131,10 @@ async def react_loop(
     repeat_count = 0
     rollback_stack: List[dict] = []  # historique des rollbacks exécutés
 
-    # Contexte enrichi (skills + mémoire récente) — même logique que /think
+    # Contexte enrichi (skills + mémoire sémantique similaire) — même logique que /think
     skills_ctx, learnings_ctx = await asyncio.gather(
         _async_load_skills_list(),
-        load_recent_learnings(),
+        load_recent_learnings(mission_hint=mission),
         return_exceptions=True,
     )
     skills_ctx    = skills_ctx    if isinstance(skills_ctx, str)    else ""
@@ -1056,6 +1274,7 @@ async def react_loop(
             print(f"[Brain/ReAct] ✅ Mission terminée en {step_num} étape(s)")
             final = {
                 "mission_id":   mission_id,
+                "mission":      mission,
                 "status":       "success",
                 "steps":        steps_trace,
                 "final_answer": action_input,
@@ -1066,6 +1285,7 @@ async def react_loop(
                 "duration_ms":  int((time.time() - started) * 1000),
             }
             await _emit(on_event, {"type": "done", **{k: v for k, v in final.items() if k != "steps"}})
+            asyncio.create_task(_save_to_memory(final, "react"))
             return final
 
         # ── Message contexte pour le prochain tour ─────────────────────────
@@ -1090,19 +1310,22 @@ async def react_loop(
         })
 
     # max_steps atteint sans done
-    final = steps_trace[-1]["observation"] if steps_trace else "Aucun résultat"
+    final_obs = steps_trace[-1]["observation"] if steps_trace else "Aucun résultat"
     print(f"[Brain/ReAct] ⚠️  max_steps={max_steps} atteint")
-    return {
+    final = {
         "mission_id":   mission_id,
+        "mission":      mission,
         "status":       "max_steps_reached",
         "steps":        steps_trace,
-        "final_answer": final,
+        "final_answer": final_obs,
         "steps_taken":  max_steps,
         "rollbacks":    rollback_stack,
         "provider":     "claude",
         "model":        CLAUDE_MODEL,
         "duration_ms":  int((time.time() - started) * 1000),
     }
+    asyncio.create_task(_save_to_memory(final, "react"))
+    return final
 
 
 # ─── Supervisor / Workers ─────────────────────────────────────────────────
@@ -1405,6 +1628,7 @@ async def _tot_expand(
     depth: int,
     path_so_far: List[str],
     n_branches: int,
+    memory_context: str = "",
 ) -> List[dict]:
     """Génère n_branches pensées candidates depuis l'état courant (BFS node expansion)."""
     path_text = (
@@ -1418,6 +1642,8 @@ async def _tot_expand(
         .replace("{path_so_far}", path_text)
         .replace("{n_branches}", str(n_branches))
     )
+    if memory_context:
+        prompt += f"\n\n[MÉMOIRE CONTEXTUELLE — expériences similaires passées]\n{memory_context}"
     try:
         result = await llm_react(
             messages=[{"role": "user", "content": "Génère les pensées candidates."}],
@@ -1503,6 +1729,13 @@ async def tot_loop(
     await _emit(on_event, {"type": "start", "mission_id": mission_id, "mission": mission,
                            "max_depth": max_depth, "n_branches": n_branches, "beam_width": beam_width})
 
+    # Récupération mémoire vectorielle — injecte le contexte des missions similaires
+    memory_ctx = ""
+    try:
+        memory_ctx = await load_recent_learnings(mission_hint=mission)
+    except Exception:
+        pass
+
     # Beam courant : liste de noeuds {"path": [...], "score": float, "is_solution": bool, ...}
     beam: List[dict] = [{"path": [], "score": 1.0, "feasibility": 1.0, "relevance": 1.0,
                           "safety": 1.0, "reason": "root", "is_solution": False,
@@ -1521,7 +1754,7 @@ async def tot_loop(
 
         # ── Expansion parallèle ────────────────────────────────────────────
         expand_results = await asyncio.gather(
-            *[_tot_expand(mission, depth, node["path"], n_branches) for node in beam],
+            *[_tot_expand(mission, depth, node["path"], n_branches, memory_ctx) for node in beam],
             return_exceptions=True,
         )
 
@@ -1660,6 +1893,7 @@ async def tot_loop(
                            "path_depth": result_dict["path_depth"],
                            "total_nodes": len(all_nodes),
                            "duration_ms": result_dict["duration_ms"]})
+    asyncio.create_task(_save_to_memory(result_dict, "tot"))
     return result_dict
 
 
@@ -1936,6 +2170,67 @@ async def tree_of_thoughts(req: ToTRequest):
     )
 
 
+# ─── Observabilité endpoints ──────────────────────────────────────────────────
+
+@app.get("/metrics/snapshot")
+async def metrics_snapshot():
+    """Snapshot instantané : santé des 7 couches + système + alertes.
+    Lance une collecte fraîche si l'historique est vide.
+    """
+    async with _METRICS_LOCK_OBS:
+        if _METRICS_HISTORY:
+            latest = _METRICS_HISTORY[-1]
+            # Si le snapshot est récent (<12s), le retourner directement
+            if time.time() - latest["timestamp"] < 12:
+                return latest
+    # Collecte fraîche
+    return await _collect_snapshot()
+
+
+@app.get("/metrics/history")
+async def metrics_history(n: int = Query(30)):
+    """Historique des n derniers snapshots (max 60 = 10min à 10s/snapshot)."""
+    async with _METRICS_LOCK_OBS:
+        history = list(_METRICS_HISTORY)
+    # Extrait uniquement les champs légers pour l'historique (sparklines)
+    slim = []
+    for s in history[-min(n, 60):]:
+        slim.append({
+            "timestamp":    s["timestamp"],
+            "cpu_percent":  s.get("system", {}).get("cpu_percent",  0),
+            "ram_percent":  s.get("system", {}).get("ram_percent",  0),
+            "disk_percent": s.get("system", {}).get("disk_percent", 0),
+            "layers_ok":    s.get("layers_ok",    0),
+            "alerts_count": s.get("alerts_count", 0),
+            "missions_active": s.get("missions", {}).get("active", 0),
+        })
+    return {"history": slim, "count": len(slim)}
+
+
+@app.get("/metrics/stream")
+async def metrics_stream():
+    """SSE — pousse un snapshot complet toutes les 10 secondes.
+    Consomme via EventSource('/brain/metrics/stream') dans le dashboard.
+    """
+    async def generate():
+        last_ts = 0.0
+        keepalive_count = 0
+        while True:
+            await asyncio.sleep(2)
+            async with _METRICS_LOCK_OBS:
+                snap = _METRICS_HISTORY[-1] if _METRICS_HISTORY else None
+            if snap and snap["timestamp"] != last_ts:
+                last_ts = snap["timestamp"]
+                yield f"data: {json.dumps(snap, ensure_ascii=False)}\n\n"
+                keepalive_count = 0
+            else:
+                keepalive_count += 1
+                if keepalive_count % 5 == 0:  # keepalive toutes les 10s
+                    yield ": keepalive\n\n"
+
+    return StreamingResponse(generate(), media_type="text/event-stream", headers=_sse_headers())
+
+
 # ─── SSE Streaming endpoints ──────────────────────────────────────────────────
 
 def _sse_headers():
@@ -2022,6 +2317,136 @@ async def tot_stream(
     return StreamingResponse(generate(), media_type="text/event-stream", headers=_sse_headers())
 
 
+# ─── Evolution proxy endpoints (/evolution/*  →  evolution.py :8005) ────────
+
+EVOLUTION_URL = f"http://localhost:{_PORTS['evolution']}"
+
+
+async def _proxy(method: str, path: str, body: Any = None, params: dict = None) -> dict:
+    """Helper générique pour proxier vers un service interne."""
+    try:
+        async with httpx.AsyncClient(timeout=120) as c:
+            if method == "GET":
+                r = await c.get(f"{EVOLUTION_URL}{path}", params=params or {})
+            elif method == "POST":
+                r = await c.post(f"{EVOLUTION_URL}{path}", json=body or {}, params=params or {})
+            elif method == "DELETE":
+                r = await c.delete(f"{EVOLUTION_URL}{path}", params=params or {})
+            else:
+                return {"error": f"Méthode non supportée: {method}"}
+            r.raise_for_status()
+            return r.json()
+    except httpx.ConnectError:
+        return {"error": "Evolution service inaccessible (port 8005)"}
+    except Exception as e:
+        return {"error": str(e)}
+
+
+@app.get("/evolution/skills")
+async def evolution_list_skills():
+    return await _proxy("GET", "/skills")
+
+
+@app.get("/evolution/skills/{name}")
+async def evolution_skill_detail(name: str):
+    return await _proxy("GET", f"/skills/{name}")
+
+
+@app.post("/evolution/generate")
+async def evolution_generate(req: dict):
+    return await _proxy("POST", "/generate-skill-node", req)
+
+
+@app.post("/evolution/evolve")
+async def evolution_evolve(req: dict):
+    return await _proxy("POST", "/evolve", req)
+
+
+@app.post("/evolution/evaluate")
+async def evolution_evaluate(req: dict):
+    return await _proxy("POST", "/evaluate", req)
+
+
+@app.get("/evolution/log")
+async def evolution_log(limit: int = Query(50)):
+    return await _proxy("GET", "/evolution-log", params={"limit": limit})
+
+
+@app.get("/evolution/metrics")
+async def evolution_metrics():
+    return await _proxy("GET", "/metrics")
+
+
+@app.post("/evolution/analyze")
+async def evolution_analyze():
+    return await _proxy("POST", "/analyze-failures")
+
+
+# ─── Memory proxy endpoints (/memory/*  →  memory.py :8006) ──────────────────
+
+@app.get("/memory/search")
+async def memory_search_proxy(q: str = Query(...), n: int = Query(5)):
+    """Recherche sémantique dans la mémoire vectorielle. Proxié vers memory.py :8006."""
+    try:
+        async with httpx.AsyncClient(timeout=15) as c:
+            r = await c.post(
+                f"{MEMORY_URL}/semantic_search",
+                json={"query": q, "n_results": n, "min_similarity": 0.25},
+            )
+            r.raise_for_status()
+            return r.json()
+    except Exception as e:
+        return {"results": [], "error": str(e), "chroma_ready": False}
+
+
+@app.get("/memory/stats")
+async def memory_stats_proxy():
+    """Statistiques mémoire vectorielle (total épisodes, ChromaDB, embed model)."""
+    try:
+        async with httpx.AsyncClient(timeout=8) as c:
+            r = await c.get(f"{MEMORY_URL}/profile")
+            r.raise_for_status()
+            return r.json()
+    except Exception as e:
+        return {"total_episodes": 0, "chroma_indexed": 0, "chroma_ready": False, "error": str(e)}
+
+
+@app.get("/memory/episodes")
+async def memory_episodes_proxy(limit: int = Query(20)):
+    """Liste des épisodes récents depuis la mémoire vectorielle."""
+    try:
+        async with httpx.AsyncClient(timeout=8) as c:
+            r = await c.get(f"{MEMORY_URL}/episodes", params={"limit": limit})
+            r.raise_for_status()
+            return r.json()
+    except Exception as e:
+        return {"episodes": [], "error": str(e)}
+
+
+@app.delete("/memory/{episode_id}")
+async def memory_forget_proxy(episode_id: str):
+    """Supprime un épisode de la mémoire vectorielle (JSONL + ChromaDB)."""
+    try:
+        async with httpx.AsyncClient(timeout=8) as c:
+            r = await c.delete(f"{MEMORY_URL}/episode/{episode_id}")
+            r.raise_for_status()
+            return r.json()
+    except Exception as e:
+        return {"deleted": False, "error": str(e)}
+
+
+@app.post("/memory/reindex")
+async def memory_reindex_proxy():
+    """Lance une ré-indexation complète de tous les épisodes dans ChromaDB."""
+    try:
+        async with httpx.AsyncClient(timeout=8) as c:
+            r = await c.post(f"{MEMORY_URL}/reindex")
+            r.raise_for_status()
+            return r.json()
+    except Exception as e:
+        return {"started": False, "error": str(e)}
+
+
 @app.post("/raw")
 async def raw_llm(req: dict):
     result = await llm(
@@ -2051,13 +2476,17 @@ async def health():
         "claude_model": CLAUDE_MODEL if claude_ok else None,
         "circuit_breakers": {k: {"failures": v, "open": v >= _PROVIDER_MAX_FAILURES} for k, v in _provider_failures.items()},
         "circuit_reset_count": _circuit_reset_count,
-        "react_enabled":      True,
-        "critic_enabled":     True,
-        "supervisor_enabled": True,
-        "tot_enabled":        True,
+        "react_enabled":            True,
+        "critic_enabled":           True,
+        "supervisor_enabled":       True,
+        "tot_enabled":              True,
+        "vector_memory_enabled":    True,
+        "observability_enabled":    True,
+        "metrics_history_size":     len(_METRICS_HISTORY),
         "react_max_steps_default":         15,
         "supervisor_max_workers_default":  5,
         "tot_default_config": {"max_depth": 4, "n_branches": 3, "beam_width": 2},
+        "memory_url": MEMORY_URL,
     }
 
 

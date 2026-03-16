@@ -358,7 +358,9 @@ async def save_episode(episode: Episode):
 async def get_episodes(limit: int = 20):
     async with _FILE_LOCK:
         episodes = _read_episodes_safe(EPISODE_FILE)
-    return {"episodes": list(reversed(episodes[-limit:]))}
+    # Ajoute _id à chaque épisode pour permettre la suppression depuis le dashboard
+    enriched = [{"_id": _episode_id(ep), **ep} for ep in reversed(episodes[-limit:])]
+    return {"episodes": enriched}
 
 
 @app.post("/search")
@@ -424,9 +426,11 @@ async def semantic_search_endpoint(req: SemanticSearchRequest):
                  or hit["document"][:100] in _episode_to_text(ep)),
                 None
             )
+            # Injecte _id dans l'épisode JSONL pour permettre la suppression
+            ep_with_id = {"_id": hit["id"], **matching} if matching else None
             enriched.append({
                 **hit,
-                "episode": matching,
+                "episode": ep_with_id,
             })
         return {
             "results":     enriched,
@@ -498,6 +502,36 @@ async def get_profile():
         "chroma_indexed":  chroma_count,
         "chroma_ready":    _chroma_ready,
     }
+
+
+@app.delete("/episode/{episode_id}")
+async def delete_episode(episode_id: str):
+    """Supprime un épisode par son ID (hash SHA256 16 chars) depuis JSONL et ChromaDB."""
+    deleted_jsonl = False
+    deleted_chroma = False
+
+    async with _FILE_LOCK:
+        episodes = _read_episodes_safe(EPISODE_FILE)
+        new_episodes = [ep for ep in episodes if _episode_id(ep) != episode_id]
+        deleted_jsonl = len(new_episodes) < len(episodes)
+
+        if deleted_jsonl:
+            tmp = EPISODE_FILE.with_suffix(".tmp")
+            lines = [json.dumps(ep, ensure_ascii=False) for ep in new_episodes]
+            tmp.write_text("\n".join(lines) + ("\n" if lines else ""), encoding="utf-8")
+            os.replace(tmp, EPISODE_FILE)
+
+    if _chroma_ready and _chroma_collection:
+        try:
+            loop = asyncio.get_event_loop()
+            await loop.run_in_executor(None, lambda: _chroma_collection.delete(ids=[episode_id]))
+            deleted_chroma = True
+        except Exception as e:
+            print(f"[Memory] ChromaDB delete error: {e}")
+
+    if not deleted_jsonl:
+        return {"deleted": False, "error": f"Épisode {episode_id} introuvable"}
+    return {"deleted": True, "episode_id": episode_id, "jsonl": True, "chroma": deleted_chroma}
 
 
 @app.get("/health")

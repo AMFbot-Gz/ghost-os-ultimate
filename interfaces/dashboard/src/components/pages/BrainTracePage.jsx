@@ -281,9 +281,9 @@ function ReactTrace() {
   }, [mission, maxSteps, running, stop]);
 
   return (
-    <div style={{ display: "flex", gap: 16, height: "100%", minHeight: 0 }}>
+    <div style={{ display: "flex", gap: 16, height: "100%", minHeight: 0, overflow: "hidden" }}>
       {/* ── Left: form + steps ── */}
-      <div style={{ flex: 1, display: "flex", flexDirection: "column", minHeight: 0, gap: 12 }}>
+      <div style={{ flex: 1, display: "flex", flexDirection: "column", minHeight: 0, minWidth: 0, gap: 12 }}>
         {/* Form */}
         <Card>
           <SectionTitle>Mission ReAct</SectionTitle>
@@ -354,7 +354,7 @@ function ReactTrace() {
       </div>
 
       {/* ── Right: final answer + stats ── */}
-      <div style={{ width: 300, display: "flex", flexDirection: "column", gap: 12, flexShrink: 0 }}>
+      <div style={{ width: 280, minWidth: 240, maxWidth: 300, display: "flex", flexDirection: "column", gap: 12, flexShrink: 0 }}>
         {stats && (
           <Card>
             <SectionTitle color={C.ok}>✓ Terminé</SectionTitle>
@@ -633,9 +633,9 @@ function TotTrace() {
   const depths = Object.keys(nodesByDepth).map(Number).sort((a, b) => a - b);
 
   return (
-    <div style={{ display: "flex", gap: 16, height: "100%", minHeight: 0 }}>
+    <div style={{ display: "flex", gap: 16, height: "100%", minHeight: 0, overflow: "hidden" }}>
       {/* ── Left: form + tree ── */}
-      <div style={{ flex: 1, display: "flex", flexDirection: "column", minHeight: 0, gap: 12 }}>
+      <div style={{ flex: 1, display: "flex", flexDirection: "column", minHeight: 0, minWidth: 0, gap: 12 }}>
         {/* Form */}
         <Card>
           <SectionTitle>Mission Tree of Thoughts</SectionTitle>
@@ -727,7 +727,7 @@ function TotTrace() {
       </div>
 
       {/* ── Right: stats + plan ── */}
-      <div style={{ width: 320, display: "flex", flexDirection: "column", gap: 12, flexShrink: 0 }}>
+      <div style={{ width: 300, minWidth: 260, maxWidth: 320, display: "flex", flexDirection: "column", gap: 12, flexShrink: 0 }}>
         {doneStats && (
           <Card>
             <SectionTitle color={C.ok}>✓ {doneStats.status === "solution_found" ? "Solution trouvée" : "Meilleur chemin"}</SectionTitle>
