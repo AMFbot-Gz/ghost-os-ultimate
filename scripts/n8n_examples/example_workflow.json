@@ -1,0 +1,48 @@
+{
+  "id": "example-workflow-001",
+  "name": "Fetch API and Save Result",
+  "active": false,
+  "nodes": [
+    {
+      "id": "node-start",
+      "name": "Start",
+      "type": "n8n-nodes-base.start",
+      "typeVersion": 1,
+      "position": [100, 300],
+      "parameters": {}
+    },
+    {
+      "id": "node-http",
+      "name": "Fetch JSONPlaceholder",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 1,
+      "position": [300, 300],
+      "parameters": {
+        "url": "https://jsonplaceholder.typicode.com/todos/1",
+        "method": "GET",
+        "responseFormat": "json"
+      }
+    },
+    {
+      "id": "node-write",
+      "name": "Write Result to File",
+      "type": "n8n-nodes-base.writeBinaryFile",
+      "typeVersion": 1,
+      "position": [500, 300],
+      "parameters": {
+        "fileName": "/tmp/n8n_result.json",
+        "dataPropertyName": "data"
+      }
+    }
+  ],
+  "connections": {
+    "Start": {
+      "main": [[{ "node": "Fetch JSONPlaceholder", "type": "main", "index": 0 }]]
+    },
+    "Fetch JSONPlaceholder": {
+      "main": [[{ "node": "Write Result to File", "type": "main", "index": 0 }]]
+    }
+  },
+  "createdAt": "2026-03-17T00:00:00.000Z",
+  "updatedAt": "2026-03-17T00:00:00.000Z"
+}
