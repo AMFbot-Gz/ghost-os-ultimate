@@ -107,6 +107,32 @@ def _now_utc() -> datetime:
     return datetime.now(timezone.utc)
 
 
+# ─── Heartbeat vers la Reine centrale ──────────────────────────────────────────
+_MACHINE_ID = os.getenv("MACHINE_ID") or __import__("hashlib").sha256(
+    f"{__import__('socket').gethostname()}-{__import__('uuid').getnode()}".encode()
+).hexdigest()[:16]
+_RUCHE_ID = os.getenv("RUCHE_ID") or f"ruche-{_MACHINE_ID[:8]}"
+
+async def _phone_home() -> None:
+    """Envoie un heartbeat à la Reine centrale (fire-and-forget, silencieux si Reine absente)."""
+    reine_url = os.getenv("REINE_URL", "").rstrip("/")
+    if not reine_url:
+        return  # Cette machine est la Reine
+
+    try:
+        payload = {
+            "ruche_id":   _RUCHE_ID,
+            "machine_id": _MACHINE_ID,
+            "status":     "up",
+            "timestamp":  datetime.utcnow().isoformat(),
+            "layers_up":  [],  # TODO: ajouter vrai état layers
+        }
+        async with httpx.AsyncClient(timeout=5) as client:
+            await client.post(f"{reine_url}/api/v1/ruches/heartbeat", json=payload)
+    except Exception:
+        pass  # Reine absente ou réseau coupé — non critique
+
+
 # ─── Validation des variables d'environnement (fix #7) ─────────────────────────
 
 def _validate_env():
@@ -132,12 +158,21 @@ async def init_db():
 
 def _init_db_sync():
     conn = sqlite3.connect(str(DB_PATH), check_same_thread=False)
-    conn.execute("""CREATE TABLE IF NOT EXISTS missions (
+    cursor = conn.cursor()
+    cursor.execute("""CREATE TABLE IF NOT EXISTS missions (
         id TEXT PRIMARY KEY, input TEXT, status TEXT,
         plan TEXT, result TEXT, created_at TEXT,
-        completed_at TEXT, provider TEXT, duration_ms INTEGER
+        completed_at TEXT, provider TEXT, duration_ms INTEGER,
+        machine_id TEXT DEFAULT '', ruche_id TEXT DEFAULT ''
     )""")
     conn.commit()
+    # Migration: ajouter machine_id et ruche_id si absents (DB existante)
+    for col in ["machine_id", "ruche_id"]:
+        try:
+            cursor.execute(f"ALTER TABLE missions ADD COLUMN {col} TEXT DEFAULT ''")
+            conn.commit()
+        except Exception:
+            pass  # colonne déjà présente
     conn.close()
 
 
@@ -159,6 +194,8 @@ async def save_mission(mission_id: str, input_text: str, status: str,
 def _save_mission_sync(mission_id, input_text, status, plan, result, provider, duration_ms):
     conn = sqlite3.connect(str(DB_PATH), check_same_thread=False)
     now = _now_utc().isoformat()
+    machine_id = os.getenv("MACHINE_ID", _MACHINE_ID)
+    ruche_id   = os.getenv("RUCHE_ID",   _RUCHE_ID)
     existing = conn.execute("SELECT id FROM missions WHERE id=?", (mission_id,)).fetchone()
     if existing:
         conn.execute(
@@ -170,9 +207,10 @@ def _save_mission_sync(mission_id, input_text, status, plan, result, provider, d
         )
     else:
         conn.execute(
-            "INSERT INTO missions VALUES (?,?,?,?,?,?,?,?,?)",
+            "INSERT INTO missions VALUES (?,?,?,?,?,?,?,?,?,?,?)",
             (mission_id, input_text, status,
-             json.dumps(plan) if plan else None, result, now, None, provider, duration_ms)
+             json.dumps(plan) if plan else None, result, now, None, provider, duration_ms,
+             machine_id, ruche_id)
         )
     conn.commit()
     conn.close()
@@ -694,6 +732,7 @@ async def vital_loop():
                             "model_used":  "system",
                             "skills_used": [],
                             "learned":     None,
+                            "machine_id":  _MACHINE_ID,
                         }
                     )
                 _hb_data = _hb_r.json()
@@ -718,6 +757,9 @@ async def vital_loop():
         _cycle_ms = int((time.monotonic() - _cycle_start) * 1000)
         if _vital_loop_cycle % 10 == 0:
             print(f"[Queen] Cycle {_vital_loop_cycle} — {_cycle_ms}ms — missions actives: {_active_missions}")
+
+        # ─── Heartbeat vers la Reine centrale (fire-and-forget) ──────────────
+        asyncio.create_task(_phone_home())
 
         await asyncio.sleep(_interval)
 
@@ -872,7 +914,12 @@ async def execute_mission(input_text: str, auto: bool = False) -> dict:
                         "success":     True,
                         "duration_ms": duration_ms,
                         "model_used":  provider,
-                        "skills_used": []
+                        "skills_used": list(set(
+                            s for r in results
+                            if isinstance(r, dict)
+                            for s in (r.get("skills_used") or [])
+                        )),
+                        "machine_id":  _MACHINE_ID,
                     }
                 )
             ep_data = ep_r.json()

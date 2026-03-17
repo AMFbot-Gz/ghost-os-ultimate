@@ -32,7 +32,8 @@ Ghost OS Ultimate v1.0.0
 │   ├── swarm_router.py   :8013  Bee Specialization — 5 abeilles (Phase 16)
 │   ├── validator.py      :8014  Skill Validator Loop — 5 checks + deploy/quarantine (Phase 17)
 │   ├── computer_use.py   :8015  Computer Use Master — See→Plan→Act→Verify GUI sessions (Phase 18)
-│   └── consciousness_bridge.py :8016  NeuralEventBus ↔ 15 couches Python · signaux phéromone · WS (Phase 19)
+│   ├── consciousness_bridge.py :8016  NeuralEventBus ↔ 15 couches Python · signaux phéromone · WS (Phase 19)
+│   └── skill_sync.py     :8019  Sync skills Ruche↔Reine — pull/push auto 5min
 │
 ├── core/
 │   ├── consciousness/            ← NOUVEAU — conscience universelle

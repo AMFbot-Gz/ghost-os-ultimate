@@ -27,6 +27,8 @@ const ROOT       = join(__dirname, '..', '..');
 const HUB_DIR    = join(ROOT, 'skills', 'hub');
 const HUB_REGISTRY = join(HUB_DIR, 'registry.json');
 
+const _ruches = new Map(); // ruche_id → { machine_id, status, last_seen, ... }
+
 // ─── Semaphore registry ──────────────────────────────────────────────────────
 let   _registryLock = false;
 const _registryQueue = [];
@@ -209,7 +211,47 @@ export function registerHubRoutes(app) {
       machines:        machines,
       total_downloads: totalDl,
       lastUpdated:     reg.lastUpdated,
+      ruches_count:    _ruches.size,
     });
+  });
+
+  // POST /api/v1/ruches/heartbeat — Ruche annonce qu'elle est UP
+  app.post('/api/v1/ruches/heartbeat', async (c) => {
+    let body;
+    try { body = await c.req.json(); } catch { return c.json({ ok: false, error: 'JSON invalide' }, 400); }
+
+    const { ruche_id = 'unknown', machine_id = 'unknown', status = 'up', timestamp } = body;
+    _ruches.set(ruche_id, {
+      machine_id,
+      status,
+      last_seen: timestamp || new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    });
+
+    return c.json({ ok: true, ruche_id, ack: new Date().toISOString() });
+  });
+
+  // GET /api/v1/ruches — liste toutes les ruches connues + état (up/stale/down)
+  app.get('/api/v1/ruches', (c) => {
+    const now = Date.now();
+    const ruches = [];
+    for (const [ruche_id, info] of _ruches.entries()) {
+      const lastSeenMs = new Date(info.last_seen).getTime();
+      const ageS = Math.round((now - lastSeenMs) / 1000);
+      // Stale si pas de heartbeat depuis >120s, Down si >300s
+      const health = ageS < 120 ? 'up' : ageS < 300 ? 'stale' : 'down';
+      ruches.push({ ruche_id, ...info, age_s: ageS, health });
+    }
+    return c.json({ ok: true, count: ruches.length, ruches });
+  });
+
+  // POST /api/v1/hub/invalidate-cache — skill_sync.py notifie que de nouveaux skills sont dispo
+  app.post('/api/v1/hub/invalidate-cache', (c) => {
+    // Importe reloadSkills de skillLoader pour invalider le cache 5min
+    import('../skills/skillLoader.js')
+      .then(({ reloadSkills }) => reloadSkills())
+      .catch(() => {});
+    return c.json({ ok: true, message: 'Cache skills invalidé' });
   });
 
   console.log('[SkillHub] Routes montées: GET/POST /api/v1/hub/*');

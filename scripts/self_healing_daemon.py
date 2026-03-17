@@ -50,6 +50,12 @@ LAYERS: dict[str, dict] = {
     "validator":   {"module": "agent.validator",          "port": 8014, "critical": False},
     "computer_use":{"module": "agent.computer_use",       "port": 8015, "critical": False},
     "consciousness_bridge": {"module": "agent.consciousness_bridge", "port": 8016, "critical": False},
+    "skill_sync": {
+        "module": "agent.skill_sync",
+        "port": 8019,
+        "critical": False,
+        "desc": "Sync skills Ruche↔Reine",
+    },
 }
 
 CHECK_INTERVAL   = 10     # secondes entre chaque health check

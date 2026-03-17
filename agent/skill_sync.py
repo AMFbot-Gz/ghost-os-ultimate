@@ -253,6 +253,10 @@ async def run_sync(since: Optional[str] = None) -> dict:
     # ── Mise à jour du registry local avec les nouveaux skills ──────────────
     await _update_local_registry(pulled)
 
+    # Notifier Node.js de recharger le cache si de nouveaux skills ont été installés
+    if pulled:
+        asyncio.create_task(_notify_node_cache_invalidation())
+
     now = datetime.utcnow().isoformat()
     _state["last_sync"]    = now
     _state["last_sync_ok"] = len(errors) == 0
@@ -266,6 +270,18 @@ async def run_sync(since: Optional[str] = None) -> dict:
         "errors": errors,
         "at":     now,
     }
+
+
+async def _notify_node_cache_invalidation():
+    try:
+        async with httpx.AsyncClient(timeout=5) as client:
+            await client.post(
+                f"http://localhost:{os.getenv('API_PORT', '3000')}/api/v1/hub/invalidate-cache",
+                timeout=3,
+            )
+            print(f"[SkillSync] Cache Node.js invalidé")
+    except Exception:
+        pass  # Node.js peut ne pas être démarré
 
 
 # ─── Boucle de sync automatique ───────────────────────────────────────────────
@@ -347,6 +363,20 @@ async def publish_skill(name: str):
 
     _state["pushed_total"] += 1
     return {"ok": True, "name": name, "machine_id": MACHINE_ID}
+
+
+@app.post("/invalidate")
+async def invalidate_node_cache():
+    """Notifie le skillLoader Node.js de vider son cache (appelé après un pull réussi)."""
+    try:
+        async with httpx.AsyncClient(timeout=5) as client:
+            r = await client.post(
+                f"http://localhost:{os.getenv('API_PORT', '3000')}/api/v1/hub/invalidate-cache",
+                timeout=3,
+            )
+            return {"ok": True, "node_notified": r.status_code == 200}
+    except Exception as e:
+        return {"ok": True, "node_notified": False, "reason": str(e)}
 
 
 @app.get("/status")
