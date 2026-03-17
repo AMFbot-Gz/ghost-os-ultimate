@@ -6,6 +6,7 @@ import hashlib
 import json
 import os
 import subprocess
+import sys
 import asyncio
 from datetime import datetime
 from pathlib import Path
@@ -30,7 +31,11 @@ _HASH_LOCK = asyncio.Lock()  # FIX 5 — protège LAST_HASH contre les race cond
 
 
 def take_screenshot(region: Optional[str] = None) -> Path:
-    """Capture écran via screencapture (macOS). Lève RuntimeError si échec."""
+    """Capture écran via screencapture (macOS). Lève RuntimeError si échec ou si non-macOS."""
+    if sys.platform != "darwin":
+        raise RuntimeError(
+            f"screencapture non disponible sur cette plateforme ({sys.platform})"
+        )
     if region:
         cmd = ["screencapture", "-x", "-R", region, str(SCREENSHOT_PATH)]
     else:

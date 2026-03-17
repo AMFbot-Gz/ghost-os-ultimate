@@ -15,13 +15,20 @@ import tempfile
 import hashlib
 from datetime import datetime
 from pathlib import Path
-from fastapi import FastAPI
+from fastapi import FastAPI, Query
 from pydantic import BaseModel
 from typing import Optional, List, Any
 import httpx
 import yaml
 from dotenv import load_dotenv
 load_dotenv()
+
+# ─── ChromaDB — import optionnel ──────────────────────────────────────────
+try:
+    import chromadb
+    _CHROMA_AVAILABLE = True
+except ImportError:
+    _CHROMA_AVAILABLE = False
 
 ROOT = Path(__file__).resolve().parent.parent
 
@@ -31,13 +38,16 @@ with open(ROOT / "agent_config.yml") as f:
 app = FastAPI(title="PICO-RUCHE Memory", version="2.0.0")
 
 EPISODE_FILE     = ROOT / CONFIG["memory"]["episode_file"]
+EPISODES_FILE    = EPISODE_FILE  # alias Phase 28
 PERSISTENT_FILE  = ROOT / CONFIG["memory"]["persistent_file"]
 WORLD_STATE_FILE = ROOT / CONFIG["memory"]["world_state_file"]
 MAX_EPISODES     = CONFIG["memory"]["max_episodes"]
 OLLAMA_URL       = CONFIG["ollama"]["base_url"]
 EMBED_MODEL      = "nomic-embed-text"
 CHROMA_DIR       = ROOT / "agent" / "memory" / "chromadb"
+CHROMA_PATH      = Path(__file__).parent / "chroma_db"   # alias Phase 28
 CHROMA_COLLECTION= "ghost_os_episodes"
+ARCHIVE_FILE     = EPISODE_FILE.parent / "episodes_archive.jsonl"
 
 EPISODE_FILE.parent.mkdir(parents=True, exist_ok=True)
 CHROMA_DIR.mkdir(parents=True, exist_ok=True)
@@ -61,8 +71,11 @@ def _init_chroma() -> bool:
     Retourne True si succès, False si ChromaDB indisponible (dégradé silencieux).
     """
     global _chroma_client, _chroma_collection, _chroma_ready
+    if not _CHROMA_AVAILABLE:
+        print("[Memory] ⚠️  ChromaDB non installé (mode dégradé mots-clés)")
+        _chroma_ready = False
+        return False
     try:
-        import chromadb
         _chroma_client = chromadb.PersistentClient(path=str(CHROMA_DIR))
         _chroma_collection = _chroma_client.get_or_create_collection(
             name=CHROMA_COLLECTION,
@@ -154,6 +167,11 @@ async def _index_episode(episode: dict) -> bool:
     except Exception as e:
         print(f"[Memory] Index error: {e}")
         return False
+
+
+async def _index_episode_chroma(episode: dict) -> bool:
+    """Alias Phase 28 — indexe un épisode dans ChromaDB (délègue à _index_episode)."""
+    return await _index_episode(episode)
 
 
 async def semantic_search(query: str, n_results: int = 5, min_similarity: float = 0.3) -> List[dict]:
@@ -301,9 +319,12 @@ async def _trim_unlocked(filepath: Path, max_ep: int) -> None:
         kept = lines[-max_ep:]
         archive_path = filepath.parent / "episodes_archive.jsonl"
         try:
-            with open(archive_path, "a", encoding="utf-8") as af:
-                for line in to_archive:
-                    af.write(line + "\n")
+            # Écriture atomique pour l'archive (Phase 23)
+            archive_tmp = Path(str(archive_path) + '.tmp')
+            existing_archive = archive_path.read_text(encoding='utf-8') if archive_path.exists() else ''
+            new_lines = "\n".join(to_archive) + "\n"
+            archive_tmp.write_text(existing_archive + new_lines, encoding='utf-8')
+            archive_tmp.replace(archive_path)
             print(f"[Memory] 📦 Archivage: {len(to_archive)} épisodes")
         except Exception as arch_err:
             print(f"[Memory] ⚠️  Archive error: {arch_err}")
@@ -340,12 +361,19 @@ async def startup():
 async def save_episode(episode: Episode):
     async with _FILE_LOCK:
         entry = {"timestamp": datetime.utcnow().isoformat(), **episode.model_dump()}
-        with open(EPISODE_FILE, "a", encoding="utf-8") as f:
-            f.write(json.dumps(entry, ensure_ascii=False) + "\n")
+        # Écriture atomique — épisode JSONL (Phase 23)
+        tmp = Path(str(EPISODE_FILE) + '.tmp')
+        existing = EPISODE_FILE.read_text(encoding='utf-8') if EPISODE_FILE.exists() else ''
+        tmp.write_text(existing + json.dumps(entry, ensure_ascii=False) + '\n', encoding='utf-8')
+        tmp.replace(EPISODE_FILE)
         await _trim_unlocked(EPISODE_FILE, MAX_EPISODES)
         if episode.learned:
-            with open(PERSISTENT_FILE, "a", encoding="utf-8") as f:
-                f.write(f"\n### {datetime.utcnow().strftime('%Y-%m-%d %H:%M')} — Apprentissage\n{episode.learned}\n")
+            # Écriture atomique — profil persistant (Phase 23)
+            learned_line = f"\n### {datetime.utcnow().strftime('%Y-%m-%d %H:%M')} — Apprentissage\n{episode.learned}\n"
+            tmp_p = Path(str(PERSISTENT_FILE) + '.tmp')
+            existing_p = PERSISTENT_FILE.read_text(encoding='utf-8') if PERSISTENT_FILE.exists() else ''
+            tmp_p.write_text(existing_p + learned_line, encoding='utf-8')
+            tmp_p.replace(PERSISTENT_FILE)
         episodes = _read_episodes_safe(EPISODE_FILE)
 
     # Indexation ChromaDB en arrière-plan (non-bloquant)
@@ -447,6 +475,29 @@ async def semantic_search_endpoint(req: SemanticSearchRequest):
         "chroma_ready": True,
         "embed_model": EMBED_MODEL,
     }
+
+
+@app.get("/semantic_search")
+async def semantic_search_get(q: str = Query(...), n: int = Query(5)):
+    """Recherche sémantique dans les épisodes via ChromaDB (GET, Phase 28)."""
+    if not _chroma_collection:
+        return {"results": [], "backend": "unavailable", "query": q}
+    try:
+        results = _chroma_collection.query(
+            query_texts=[q],
+            n_results=min(n, _chroma_collection.count() or 1),
+        )
+        episodes = []
+        for i, doc in enumerate(results['documents'][0]):
+            episodes.append({
+                "id": results['ids'][0][i],
+                "text": doc,
+                "distance": results['distances'][0][i] if 'distances' in results else None,
+                "metadata": results['metadatas'][0][i],
+            })
+        return {"results": episodes, "backend": "chromadb", "query": q, "count": len(episodes)}
+    except Exception as e:
+        return {"results": [], "backend": "error", "error": str(e)}
 
 
 @app.post("/reindex")

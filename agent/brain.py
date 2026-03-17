@@ -246,6 +246,66 @@ Sur la base de ce chemin de réflexion, produis un plan d'exécution CONCRET :
 
 Sois direct et pratique — ce plan sera exécuté par Ghost OS."""
 
+# ─── ModelRouter — Auto-sélection modèle selon complexité ────────────────────
+
+MODEL_TIERS = {
+    "light": {
+        "ollama": os.environ.get("OLLAMA_MODEL_WORKER", "llama3.2:3b"),
+        "description": "Tâches simples — extraction, reformatage, Q&A direct",
+        "max_tokens": 512,
+    },
+    "code": {
+        "ollama": os.environ.get("OLLAMA_MODEL_CODER", "qwen2.5-coder:7b"),
+        "description": "Génération de code Python/JS",
+        "max_tokens": 2048,
+    },
+    "reasoning": {
+        "ollama": os.environ.get("OLLAMA_MODEL_STRATEGIST", "llama3:latest"),
+        "description": "Planification multi-étapes, déduction complexe",
+        "max_tokens": 3000,
+    },
+    "critical": {
+        "ollama": os.environ.get("OLLAMA_MODEL_STRATEGIST", "llama3:latest"),
+        "cloud": "claude",  # Utilise Claude API en mode critical
+        "description": "Décisions critiques, missions haute complexité",
+        "max_tokens": 4096,
+    },
+}
+
+_LIGHT_KEYWORDS   = {"liste", "list", "résume", "summarize", "traduis", "translate",
+                      "formate", "format", "extrait", "extract", "quelle", "what", "qui", "who"}
+_CODE_KEYWORDS    = {"python", "javascript", "code", "script", "fonction", "function",
+                      "classe", "class", "def ", "import", "module", "bug", "erreur", "error"}
+_CRITICAL_KEYWORDS = {"planifie", "plan", "stratégie", "strategy", "architecture",
+                       "décision", "mission critique", "deploy", "production"}
+
+
+def classify_complexity(prompt: str) -> str:
+    """Classifie la complexité d'un prompt en tier: light | code | reasoning | critical."""
+    p_lower = prompt.lower()
+    words = set(p_lower.split())
+
+    if any(kw in p_lower for kw in _CRITICAL_KEYWORDS) or len(prompt) > 1000:
+        return "critical"
+    if any(kw in p_lower for kw in _CODE_KEYWORDS):
+        return "code"
+    if any(kw in words for kw in _LIGHT_KEYWORDS) and len(prompt) < 200:
+        return "light"
+    return "reasoning"
+
+
+def get_model_for_tier(tier: str) -> str:
+    """Retourne le nom de modèle Ollama pour un tier."""
+    return MODEL_TIERS.get(tier, MODEL_TIERS["reasoning"])["ollama"]
+
+
+# ─── Config Kimi (Moonshot API) ───────────────────────────────────────────────
+
+_KIMI_API_KEY    = os.environ.get("KIMI_API_KEY", "")
+_KIMI_MODEL      = os.environ.get("KIMI_MODEL", "moonshot-v1-8k")
+_KIMI_BASE_URL   = "https://api.moonshot.cn/v1"
+_kimi_enabled    = bool(_KIMI_API_KEY) and os.environ.get("KIMI_ENABLED", "false").lower() == "true"
+
 # ─── Provider-agnostic model config (format vendor/model, inspiré PicoClaw) ──
 GHOST_MODEL = os.environ.get('GHOST_MODEL', '')  # ex: 'anthropic/claude-opus-4-6'
 
@@ -361,20 +421,22 @@ async def call_claude(messages: list, system: str = "", thinking: bool = True) -
     return text
 
 
-async def call_kimi(messages: list, system: str = "") -> str:
+async def call_kimi(messages: list, system: str = "", max_tokens: int = 2000) -> str:
+    """Appel Kimi (Moonshot API) — fallback entre Claude et OpenAI."""
     key = os.environ.get("KIMI_API_KEY", "")
     if not key:
         raise ValueError("KIMI_API_KEY absent")
-    msgs = []
-    if system:
-        msgs.append({"role": "system", "content": system})
-    msgs.extend(messages)
-    async with httpx.AsyncClient(timeout=30) as client:
-        r = await client.post(
-            "https://api.moonshot.cn/v1/chat/completions",
-            headers={"Authorization": f"Bearer {key}"},
-            json={"model": "moonshot-v1-8k", "messages": msgs, "max_tokens": 2000}
-        )
+    headers = {
+        "Authorization": f"Bearer {key}",
+        "Content-Type": "application/json",
+    }
+    payload = {
+        "model": _KIMI_MODEL,
+        "max_tokens": max_tokens,
+        "messages": [{"role": "system", "content": system}] + messages if system else messages,
+    }
+    async with httpx.AsyncClient(timeout=60.0) as client:
+        r = await client.post(f"{_KIMI_BASE_URL}/chat/completions", json=payload, headers=headers)
         r.raise_for_status()
         return r.json()["choices"][0]["message"]["content"]
 
@@ -934,8 +996,9 @@ async def _save_to_memory(result: dict, loop_type: str) -> None:
             "success":    success,
             "duration_ms": result.get("duration_ms", 0),
             "model_used": result.get("model", ""),
-            "skills_used": [],
+            "skills_used": result.get("skills_used", []),
             "learned":    learned,
+            "machine_id": os.getenv("MACHINE_ID", ""),
         }
         async with httpx.AsyncClient(timeout=8) as c:
             r = await c.post(f"{MEMORY_URL}/episode", json=payload)
@@ -1130,6 +1193,7 @@ async def react_loop(
     last_action_input = None  # anti-boucle infinie
     repeat_count = 0
     rollback_stack: List[dict] = []  # historique des rollbacks exécutés
+    _executed_skills: List[str] = []  # skills/actions utilisés pendant cette mission
 
     # Contexte enrichi (skills + mémoire sémantique similaire) — même logique que /think
     skills_ctx, learnings_ctx = await asyncio.gather(
@@ -1203,6 +1267,10 @@ async def react_loop(
         else:
             repeat_count = 0
         last_action_input = action_input
+
+        # ── Accumulation des skills utilisés ──────────────────────────────
+        if action not in ("done",):
+            _executed_skills.append(action)
 
         # ── Act + Observe ──────────────────────────────────────────────────
         obs = await _execute_react_action(action, action_input, timeout_per_step)
@@ -1283,6 +1351,7 @@ async def react_loop(
                 "provider":     result["provider"],
                 "model":        result["model"],
                 "duration_ms":  int((time.time() - started) * 1000),
+                "skills_used":  list(set(_executed_skills)),
             }
             await _emit(on_event, {"type": "done", **{k: v for k, v in final.items() if k != "steps"}})
             asyncio.create_task(_save_to_memory(final, "react"))
@@ -1323,6 +1392,7 @@ async def react_loop(
         "provider":     "claude",
         "model":        CLAUDE_MODEL,
         "duration_ms":  int((time.time() - started) * 1000),
+        "skills_used":  list(set(_executed_skills)),
     }
     asyncio.create_task(_save_to_memory(final, "react"))
     return final
@@ -2944,6 +3014,24 @@ async def swarm_health():
     return await _proxy_swarm("GET", "/health")
 
 
+# ─── ModelRouter endpoint ─────────────────────────────────────────────────────
+
+class ClassifyRequest(BaseModel):
+    prompt: str
+
+
+@app.post("/classify_complexity")
+async def classify_complexity_endpoint(req: ClassifyRequest):
+    """Classifie la complexité d'un prompt et retourne le tier + modèle recommandé."""
+    tier = classify_complexity(req.prompt)
+    return {
+        "tier": tier,
+        "model": get_model_for_tier(tier),
+        "description": MODEL_TIERS[tier]["description"],
+        "max_tokens": MODEL_TIERS[tier]["max_tokens"],
+    }
+
+
 @app.post("/raw")
 async def raw_llm(req: dict):
     result = await llm(
@@ -3086,6 +3174,64 @@ async def optimizer_trigger():
 @app.get("/optimizer/health")
 async def optimizer_health():
     return await _proxy_optimizer("GET", "/health")
+
+
+# ─── Phase 22 — Reflexion proxy ───────────────────────────────────────────────
+
+_REFLEXION_URL = os.environ.get("REFLEXION_URL", "http://localhost:8018")
+
+
+async def _proxy_reflexion(method: str, path: str, body=None, params=None):
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            url = f"{_REFLEXION_URL}{path}"
+            if method == "GET":
+                r = await client.get(url, params=params)
+            else:
+                r = await client.post(url, json=body)
+            return r.json()
+    except Exception as e:
+        return {"error": str(e), "layer": "reflexion", "path": path}
+
+
+@app.get("/reflexion/status")
+async def reflexion_status():
+    return await _proxy_reflexion("GET", "/status")
+
+
+@app.get("/reflexion/stats")
+async def reflexion_stats():
+    return await _proxy_reflexion("GET", "/stats")
+
+
+@app.get("/reflexion/reflexions")
+async def reflexion_list(limit: int = Query(20)):
+    return await _proxy_reflexion("GET", "/reflexions", params={"limit": limit})
+
+
+@app.get("/reflexion/injections")
+async def reflexion_injections(limit: int = Query(20)):
+    return await _proxy_reflexion("GET", "/injections", params={"limit": limit})
+
+
+@app.post("/reflexion/reflect")
+async def reflexion_reflect(payload: dict):
+    return await _proxy_reflexion("POST", "/reflect", payload)
+
+
+@app.post("/reflexion/inject")
+async def reflexion_inject(payload: dict):
+    return await _proxy_reflexion("POST", "/inject", payload)
+
+
+@app.post("/reflexion/trigger")
+async def reflexion_trigger():
+    return await _proxy_reflexion("POST", "/trigger", {})
+
+
+@app.get("/reflexion/health")
+async def reflexion_health():
+    return await _proxy_reflexion("GET", "/health")
 
 
 if __name__ == "__main__":

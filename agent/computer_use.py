@@ -27,6 +27,7 @@ import json
 import os
 import sqlite3
 import subprocess
+import sys
 import time
 import uuid
 from contextlib import asynccontextmanager
@@ -45,6 +46,16 @@ try:
     load_dotenv(Path(__file__).resolve().parent.parent / ".env", override=False)
 except ImportError:
     pass
+
+# ─── Guard plateforme — AppKit (macOS uniquement) ─────────────────────────────
+if sys.platform == "darwin":
+    try:
+        import AppKit  # noqa: F401
+        _APPKIT_AVAILABLE = True
+    except ImportError:
+        _APPKIT_AVAILABLE = False
+else:
+    _APPKIT_AVAILABLE = False
 
 # ─── Config ────────────────────────────────────────────────────────────────────
 
@@ -157,7 +168,13 @@ async def _screenshot_cu() -> tuple[bytes, str]:
     Screenshot en résolution LOGIQUE (corrige Retina 2×→1×).
     PyAutoGUI et Anthropic CU utilisent les mêmes coordonnées logiques.
     Retourne (png_bytes, sha256_hash).
+    Lève RuntimeError sur les plateformes non-macOS.
     """
+    if sys.platform != "darwin":
+        raise RuntimeError(
+            f"Computer Use GUI nécessite macOS — plateforme détectée : {sys.platform}"
+        )
+
     SCREENSHOTS_DIR.mkdir(parents=True, exist_ok=True)
     path = SCREENSHOTS_DIR / f"cu_{uuid.uuid4().hex[:8]}.png"
 
@@ -381,6 +398,16 @@ async def _run_anthropic_cu_session(session_id: str):
     À chaque étape : screenshot → Claude voit l'écran → action → exécute → répète.
     Fonctionne avec tous les modèles Anthropic (opus-4-6, sonnet-4-6, etc.)
     """
+    if sys.platform != "darwin":
+        async with _SESSIONS_LOCK:
+            session = _SESSIONS.get(session_id)
+            if session:
+                session.update({
+                    "status": "failed",
+                    "error": f"Computer Use GUI nécessite macOS ({sys.platform})",
+                })
+        return
+
     try:
         import anthropic as _anthropic
     except ImportError:
@@ -811,6 +838,16 @@ async def _execute_local_action(action_type: str, action_input: str) -> dict:
 
 async def _run_local_session(session_id: str):
     """Boucle locale moondream + Brain (fallback)."""
+    if sys.platform != "darwin":
+        async with _SESSIONS_LOCK:
+            session = _SESSIONS.get(session_id)
+            if session:
+                session.update({
+                    "status": "failed",
+                    "error": f"Computer Use GUI nécessite macOS ({sys.platform})",
+                })
+        return
+
     async with _SESSIONS_LOCK:
         session = _SESSIONS.get(session_id)
         if not session:
