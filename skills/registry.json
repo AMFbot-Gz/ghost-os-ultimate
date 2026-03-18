@@ -1,6 +1,6 @@
 {
-  "version": "1.1.0",
-  "lastUpdated": "2026-03-14T00:52:45.797Z",
+  "version": "1.2.0",
+  "lastUpdated": "2026-03-18T01:03:36.616Z",
   "skills": [
     {
       "name": "accessibility_reader",
@@ -13,6 +13,12 @@
       "description": "Pont ESM vers les couches Python de PICO-RUCHE — envoie des missions à queen (8001) ou des pensées à brain (8003)",
       "version": "1.0.0",
       "created": "2026-03-12T00:00:00.000Z"
+    },
+    {
+      "name": "automatise_l_organisation_des_t_l_charge",
+      "description": "organisation automatisée (yaml skill)",
+      "version": "1.0.0",
+      "tier": "Community"
     },
     {
       "name": "find_element",
@@ -33,16 +39,63 @@
       "created": "2026-03-12T00:00:00.000Z"
     },
     {
+      "name": "invoke_claude_code",
+      "description": "Lance Claude Code en mode non-interactif depuis le terminal, en contournant la détection de session imbriquée",
+      "version": "1.0.0",
+      "tier": "learned",
+      "learned_from": "Test de communication avec Claude Code depuis LaRuche MCP",
+      "created": "2026-03-13T08:48:08.588958",
+      "author": "claude-architecte"
+    },
+    {
       "name": "list_big_files",
       "description": "Liste les N fichiers les plus lourds d'un dossier (exclude node_modules, .git)",
       "version": "1.0.0",
       "created": "2026-03-12T00:00:00.000Z"
     },
     {
+      "name": "mouse_control",
+      "description": "Contrôle la souris macOS via Python Quartz CoreGraphics — déplacer, cliquer, cercle demo",
+      "version": "1.0.0",
+      "tier": "learned",
+      "learned_from": "Test de contrôle souris via HID — contournement du module HID MCP cassé",
+      "created": "2026-03-13T23:35:53.559808",
+      "author": "claude-architecte"
+    },
+    {
       "name": "open_app",
       "description": "Ouvre une application macOS par son nom (Safari, VSCode, Terminal, Finder, etc.)",
       "version": "1.0.0",
       "created": "2026-03-12T00:00:00.000Z"
+    },
+    {
+      "name": "open_google",
+      "description": "Ouvre https://google.com dans Safari",
+      "version": "1.0.0",
+      "tier": "learned",
+      "learned_from": "Demande utilisateur : sauvegarder un skill pour ouvrir Google dans Safari",
+      "created": "2026-03-13T04:48:18.257153",
+      "author": "claude-architecte"
+    },
+    {
+      "name": "organise_les_screenshots_par_date_et_les",
+      "description": "organisation automatisée (yaml skill)",
+      "version": "1.0.0",
+      "tier": "System"
+    },
+    {
+      "name": "organise_screenshots",
+      "description": "Organise les screenshots par date et les compresse",
+      "version": "1.0.0",
+      "tier": "System",
+      "created": "2026-03-13T03:03:06.021Z"
+    },
+    {
+      "name": "organise_telechargements",
+      "description": "Automatise l'organisation des téléchargements par type de fichier et date",
+      "version": "1.0.0",
+      "tier": "Community",
+      "created": "2026-03-13T03:01:30.591Z"
     },
     {
       "name": "press_enter",
@@ -111,35 +164,6 @@
       "created": "2026-03-12T00:00:00.000Z"
     },
     {
-      "name": "wait_for_element",
-      "description": "Attend qu'un élément UI apparaisse sur l'écran avec polling AX tree et timeout",
-      "version": "1.0.0",
-      "created": "2026-03-12T00:00:00.000Z"
-    },
-    {
-      "name": "organise_telechargements",
-      "description": "Automatise l'organisation des téléchargements par type de fichier et date",
-      "version": "1.0.0",
-      "tier": "Community",
-      "created": "2026-03-13T03:01:30.591Z"
-    },
-    {
-      "name": "organise_screenshots",
-      "description": "Organise les screenshots par date et les compresse",
-      "version": "1.0.0",
-      "tier": "System",
-      "created": "2026-03-13T03:03:06.021Z"
-    },
-    {
-      "name": "open_google",
-      "description": "Ouvre https://google.com dans Safari",
-      "version": "1.0.0",
-      "tier": "learned",
-      "learned_from": "Demande utilisateur : sauvegarder un skill pour ouvrir Google dans Safari",
-      "created": "2026-03-13T04:48:18.257153",
-      "author": "claude-architecte"
-    },
-    {
       "name": "update_world_state",
       "description": "Met à jour ~/world_state.json après chaque mission — procédure obligatoire de fin de mission",
       "version": "1.0.0",
@@ -149,22 +173,10 @@
       "author": "claude-architecte"
     },
     {
-      "name": "invoke_claude_code",
-      "description": "Lance Claude Code en mode non-interactif depuis le terminal, en contournant la détection de session imbriquée",
+      "name": "wait_for_element",
+      "description": "Attend qu'un élément UI apparaisse sur l'écran avec polling AX tree et timeout",
       "version": "1.0.0",
-      "tier": "learned",
-      "learned_from": "Test de communication avec Claude Code depuis LaRuche MCP",
-      "created": "2026-03-13T08:48:08.588958",
-      "author": "claude-architecte"
-    },
-    {
-      "name": "mouse_control",
-      "description": "Contrôle la souris macOS via Python Quartz CoreGraphics — déplacer, cliquer, cercle demo",
-      "version": "1.0.0",
-      "tier": "learned",
-      "learned_from": "Test de contrôle souris via HID — contournement du module HID MCP cassé",
-      "created": "2026-03-13T23:35:53.559808",
-      "author": "claude-architecte"
+      "created": "2026-03-12T00:00:00.000Z"
     }
   ]
 }
