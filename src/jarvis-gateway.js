@@ -18,6 +18,8 @@ import { execute as orchestrate }      from './orchestrator.js';
 import { needsClarification }          from './metiers.js';
 import { startAutoRefresh, touchLastSeen, recordError } from './world-model.js';
 import { startSystemWatcher, touchInteraction }         from './proactive_watcher.js';
+import { learn as userLearn, toContext as userContext } from './user-model.js';
+import { transcribeVoice, isVoiceAvailable }            from './voice-handler.js';
 
 dotenv.config();
 
@@ -232,6 +234,30 @@ async function callQueenMission(command) {
   return res.json();
 }
 
+// ─── Handler message vocal (Whisper) ─────────────────────────────────────────
+bot.on('voice', async (ctx) => {
+  if (ADMIN_ID && String(ctx.from.id) !== String(ADMIN_ID)) return;
+
+  await ctx.sendChatAction('typing');
+  const fileId = ctx.message.voice?.file_id;
+  if (!fileId) return;
+
+  if (!isVoiceAvailable()) {
+    return ctx.reply('🎙 Whisper non installé — `pip3 install openai-whisper`\nEnvoyez votre commande en texte.', { parse_mode: 'Markdown' });
+  }
+
+  await ctx.reply('🎙 Transcription en cours...');
+  const text = await transcribeVoice(fileId, TOKEN);
+
+  if (!text) return ctx.reply('❌ Transcription échouée — vérifiez Whisper ou renvoyez en texte.');
+
+  await ctx.reply(`📝 *Transcription* : "${text}"`, { parse_mode: 'Markdown' });
+
+  // Injecter le texte transcrit dans le handler texte normal
+  ctx.message.text = text;
+  bot.emit('text', ctx);
+});
+
 // ─── Handlers ─────────────────────────────────────────────────────────────────
 bot.start((ctx) => ctx.reply(
   '🤖 *Jarvis Gateway actif*\n\nEnvoie une commande en langage naturel.\nExemples :\n• "prends un screenshot"\n• "status des agents"\n• "liste mes emails urgents"\n• "ouvre Safari"',
@@ -333,6 +359,14 @@ bot.on('text', async (ctx) => {
     const replyText = formatOrchestratorResult(result);
     pushHistory(chatId, 'assistant', replyText);
     await ctx.reply(replyText, { parse_mode: 'Markdown' });
+
+    // User Model — apprendre de l'interaction
+    userLearn(
+      text,
+      result.workflow?.etapes?.[0]?.skill || result.source || 'queen',
+      result.success !== false,
+      result.duration_ms || (Date.now() - t0)
+    );
   } catch (e) {
     recordError(e.message);
     await ctx.reply(`❌ Erreur : ${e.message}`);
