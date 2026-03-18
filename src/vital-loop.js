@@ -94,7 +94,8 @@ async function runChecks() {
     if (up) {
       stats.upCount++;
       stats.lastStatus = 'up';
-      restartAttempts.delete(svc.name); // reset restart counter
+      restartAttempts.delete(svc.name);         // reset restart counter
+      restartAttempts.delete(svc.name + '_alerted'); // reset alert flag → nouvelle alerte si re-down
     } else {
       stats.downCount++;
       stats.lastStatus = 'down';
