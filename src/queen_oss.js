@@ -683,7 +683,7 @@ if (STANDALONE) {
 // TELEGRAM_MODE: 'node' (défaut) = Telegraf actif | 'python' | 'disabled' = Telegraf désactivé
 else {
   const TELEGRAM_MODE = process.env.TELEGRAM_MODE || 'node';
-  if (TELEGRAM_MODE !== 'node' && TELEGRAM_MODE !== 'auto') {
+  if (TELEGRAM_MODE !== 'node' && TELEGRAM_MODE !== 'auto' || TELEGRAM_MODE === 'gateway') {
     // Guard anti-409 : si Python gère Telegram, Telegraf ne démarre pas
     logger.info(`🤖 Telegraf désactivé (TELEGRAM_MODE=${TELEGRAM_MODE}) — Telegram géré par Python ou désactivé`);
   } else {

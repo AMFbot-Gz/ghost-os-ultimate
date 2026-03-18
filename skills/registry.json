@@ -1,6 +1,6 @@
 {
-  "version": "1.2.0",
-  "lastUpdated": "2026-03-18T01:03:36.616Z",
+  "version": "1.4.0",
+  "lastUpdated": "2026-03-18T02:00:00.000Z",
   "skills": [
     {
       "name": "accessibility_reader",
@@ -177,6 +177,70 @@
       "description": "Attend qu'un élément UI apparaisse sur l'écran avec polling AX tree et timeout",
       "version": "1.0.0",
       "created": "2026-03-12T00:00:00.000Z"
+    },
+    {
+      "name": "ruche-corps-bridge",
+      "description": "Bridge vers les 58 outils Python de ruche-corps (computer use, shell, web, mémoire, Telegram)",
+      "version": "1.0.0",
+      "category": "integration",
+      "author": "jarvis-architect",
+      "tier": "core",
+      "tags": [
+        "ruche-corps",
+        "bridge",
+        "python",
+        "tools",
+        "computer-use"
+      ],
+      "created": "2026-03-18T02:00:00.000Z"
+    },
+    {
+      "name": "google-workspace",
+      "description": "Gmail + Google Calendar via OAuth2 — listEmails, sendEmail, listEvents",
+      "version": "1.0.0",
+      "category": "integration",
+      "author": "jarvis-architect",
+      "tier": "core",
+      "tags": [
+        "google",
+        "gmail",
+        "calendar",
+        "oauth2",
+        "email"
+      ],
+      "created": "2026-03-18T02:00:00.000Z"
+    },
+    {
+      "name": "shopify-backend",
+      "description": "Shopify Admin API — getOrders, getProducts, updateInventory",
+      "version": "1.0.0",
+      "category": "integration",
+      "author": "jarvis-architect",
+      "tier": "core",
+      "tags": [
+        "shopify",
+        "ecommerce",
+        "orders",
+        "products",
+        "inventory"
+      ],
+      "created": "2026-03-18T02:00:00.000Z"
+    },
+    {
+      "name": "email-triage",
+      "description": "Triage intelligent des emails Gmail — urgent/normal/spam, rapport Telegram-ready",
+      "version": "1.0.0",
+      "category": "productivity",
+      "author": "jarvis-architect",
+      "tier": "core",
+      "tags": [
+        "email",
+        "triage",
+        "gmail",
+        "classification",
+        "urgent"
+      ],
+      "created": "2026-03-18T02:00:00.000Z"
     }
   ]
 }

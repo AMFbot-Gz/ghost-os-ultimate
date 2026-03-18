@@ -1,115 +1,136 @@
 /**
- * ecosystem.config.js — PM2 Process Manager Config
+ * ecosystem.config.js — Jarvis OS Unified PM2 Config
+ * Démarrage : pm2 start ecosystem.config.js --env production
  *
- * Modes:
- *   laruche start --headless → queen + watcher only
- *   laruche start            → + dashboard
- *   laruche start --full     → + HUD Electron
+ * Processus :
+ *   1. jarvis-gateway    — Bot Telegram UNIQUE (:gateway)
+ *   2. queen-node        — API REST Node.js (:3002)
+ *   3. agents-python     — 16 agents FastAPI Python (:8001-:8019)
+ *   4. ollama-watchdog   — Surveillance Ollama (60s interval)
+ *   5. ruche-bridge      — Bridge vers ruche-corps (:8020)
+ *   6. pico-compressor   — MCP compresseur de contexte
  *
- * LARUCHE_MODE=low|balanced|high → performance profile
+ * RÈGLE : UN SEUL processus écoute Telegram = jarvis-gateway
+ * queen-node utilise TELEGRAM_MODE=gateway (Telegraf désactivé)
  */
-
-const MODE = process.env.LARUCHE_MODE || "balanced";
-
-const memoryLimits = {
-  low:      { queen: "200M", hud: "100M", dashboard: "100M", watcher: "30M" },
-  balanced: { queen: "500M", hud: "150M", dashboard: "200M", watcher: "50M" },
-  high:     { queen: "1G",   hud: "250M", dashboard: "400M", watcher: "50M" },
-};
-
-const mem = memoryLimits[MODE] || memoryLimits.balanced;
 
 export default {
   apps: [
-    // ── Core (always started) ───────────────────────────────────────────────
+    // ── 1. Jarvis Gateway — Bot Telegram UNIQUE ─────────────────────────────
     {
-      name: "ghost-queen",
-      script: "src/queen_oss.js",            // ← canonical entry point
+      name: 'jarvis-gateway',
+      script: 'src/jarvis-gateway.js',
+      interpreter: 'node',
       watch: false,
-      restart_delay: 3000,
-      max_memory_restart: mem.queen,
+      autorestart: true,
+      restart_delay: 5000,
+      max_memory_restart: '150M',
       env_production: {
-        NODE_ENV: "production",
-        PORT: 3000,
-        API_PORT: 3000,
-        HUD_PORT: 9001,
-        STANDALONE_MODE: "false",
-        HITL_AUTO_APPROVE: "true",
-        LARUCHE_MODE: MODE,
-        QUEEN_MAX_PARALLEL: 3,
-        LLM_TIMEOUT_MS: 90000,
-        SELFDEV_TIMEOUT_MS: 30000,
+        NODE_ENV: 'production',
+        TELEGRAM_MODE: 'gateway',
       },
       env_development: {
-        NODE_ENV: "development",
-        PORT: 3000,
-        API_PORT: 3000,
-        HUD_PORT: 9001,
-        STANDALONE_MODE: "false",
-        HITL_AUTO_APPROVE: "true",
-        LARUCHE_MODE: "balanced",
-        LOG_LEVEL: "debug",
-        QUEEN_MAX_PARALLEL: 3,
-        LLM_TIMEOUT_MS: 90000,
-        SELFDEV_TIMEOUT_MS: 30000,
+        NODE_ENV: 'development',
+        TELEGRAM_MODE: 'gateway',
       },
-      log_file: ".laruche/logs/queen.log",
-      error_file: ".laruche/logs/queen-error.log",
-      log_date_format: "YYYY-MM-DD HH:mm:ss",
+      log_file: '.laruche/logs/gateway.log',
+      error_file: '.laruche/logs/gateway-error.log',
+      log_date_format: 'YYYY-MM-DD HH:mm:ss',
       merge_logs: true,
     },
+
+    // ── 2. Queen Node.js — API REST :3002 ───────────────────────────────────
     {
-      name: "ghost-watcher",
-      script: "src/watcher.js",
-      max_memory_restart: mem.watcher,
-      log_file: ".laruche/logs/watcher.log",
-      error_file: ".laruche/logs/watcher-error.log",
+      name: 'queen-node',
+      script: 'src/queen_oss.js',
+      interpreter: 'node',
+      watch: false,
+      autorestart: true,
+      restart_delay: 3000,
+      max_memory_restart: '500M',
+      env_production: {
+        NODE_ENV: 'production',
+        STANDALONE_MODE: 'true',
+        API_PORT: '3002',
+        HUD_PORT: '9003',
+        TELEGRAM_MODE: 'gateway',    // ← Telegraf désactivé — gateway gère Telegram
+        GHOST_OS_MODE: 'ultimate',
+        LLM_TIMEOUT_MS: '30000',
+        LLM_GLOBAL_TIMEOUT_MS: '45000',
+        QUEEN_MAX_PARALLEL: '3',
+      },
+      env_development: {
+        NODE_ENV: 'development',
+        STANDALONE_MODE: 'true',
+        API_PORT: '3002',
+        HUD_PORT: '9003',
+        TELEGRAM_MODE: 'gateway',
+        GHOST_OS_MODE: 'ultimate',
+        LLM_TIMEOUT_MS: '30000',
+        LLM_GLOBAL_TIMEOUT_MS: '45000',
+        LOG_LEVEL: 'debug',
+      },
+      log_file: '.laruche/logs/queen.log',
+      error_file: '.laruche/logs/queen-error.log',
+      log_date_format: 'YYYY-MM-DD HH:mm:ss',
       merge_logs: true,
     },
-    // ── Dashboard (started unless --headless) ───────────────────────────────
+
+    // ── 3. Agents Python — 16 couches FastAPI :8001-:8019 ───────────────────
     {
-      name: "ghost-dashboard",
-      script: "interfaces/dashboard/server.js",
-      max_memory_restart: mem.dashboard,
-      env_production: { NODE_ENV: "production", LARUCHE_MODE: MODE },
-      log_file: ".laruche/logs/dashboard.log",
-      error_file: ".laruche/logs/dashboard-error.log",
+      name: 'agents-python',
+      script: 'scripts/start-agents.sh',
+      interpreter: 'bash',
+      watch: false,
+      autorestart: true,
+      restart_delay: 5000,
+      max_memory_restart: '2G',
+      env_production: {
+        PYTHONUNBUFFERED: '1',
+        TELEGRAM_MODE: 'gateway',    // ← queen.py polling désactivé
+      },
+      log_file: 'agent/logs/agents-startup.log',
+      error_file: 'agent/logs/agents-startup-error.log',
+      log_date_format: 'YYYY-MM-DD HH:mm:ss',
       merge_logs: true,
     },
-    // ── HUD Electron (started only with --full) ─────────────────────────────
+
+    // ── 4. Ollama Watchdog — surveillance toutes les 60s ────────────────────
     {
-      name: "ghost-hud",
-      script: "interfaces/hud/main.js",
-      interpreter: "electron",
-      max_memory_restart: mem.hud,
-      log_file: ".laruche/logs/hud.log",
-      error_file: ".laruche/logs/hud-error.log",
-      merge_logs: true,
+      name: 'ollama-watchdog',
+      script: 'scripts/ollama-watchdog.sh',
+      interpreter: 'bash',
+      watch: false,
+      autorestart: true,
+      restart_delay: 10000,
+      max_memory_restart: '30M',
+      log_file: '.laruche/logs/ollama-watchdog.log',
+      error_file: '.laruche/logs/ollama-watchdog-error.log',
+      log_date_format: 'YYYY-MM-DD HH:mm:ss',
     },
-    // ── PICO extensions ──────────────────────────────────────────────────────
-    { name: 'pico-compressor', script: 'mcp_servers/mcp-compressor/index.js', watch: false, autorestart: true },
-    { name: 'pico-context-manager', script: 'mcp_servers/mcp-context-manager/index.js', watch: false, autorestart: true },
-    // ── Python agents — 16 couches (Phases 1-19) ────────────────────────────
-    // Couches fondamentales (Phases 1-7)
-    { name: 'ghost-memory',      script: 'agent/memory.py',      interpreter: 'python3', watch: false, autorestart: true, cwd: './', max_memory_restart: '150M', log_file: 'agent/logs/memory.log',      error_file: 'agent/logs/memory-error.log' },
-    { name: 'ghost-brain',       script: 'agent/brain.py',       interpreter: 'python3', watch: false, autorestart: true, cwd: './', max_memory_restart: '400M', log_file: 'agent/logs/brain.log',       error_file: 'agent/logs/brain-error.log' },
-    { name: 'ghost-perception',  script: 'agent/perception.py',  interpreter: 'python3', watch: false, autorestart: true, cwd: './', max_memory_restart: '200M', log_file: 'agent/logs/perception.log',  error_file: 'agent/logs/perception-error.log' },
-    { name: 'ghost-executor',    script: 'agent/executor.py',    interpreter: 'python3', watch: false, autorestart: true, cwd: './', max_memory_restart: '150M', log_file: 'agent/logs/executor.log',    error_file: 'agent/logs/executor-error.log' },
-    { name: 'ghost-evolution',   script: 'agent/evolution.py',   interpreter: 'python3', watch: false, autorestart: true, cwd: './', max_memory_restart: '200M', log_file: 'agent/logs/evolution.log',   error_file: 'agent/logs/evolution-error.log' },
-    { name: 'ghost-mcp-bridge',  script: 'agent/mcp_bridge.py',  interpreter: 'python3', watch: false, autorestart: true, cwd: './', max_memory_restart: '100M', log_file: 'agent/logs/mcp_bridge.log',  error_file: 'agent/logs/mcp_bridge-error.log' },
-    // Phases 10-15
-    { name: 'ghost-planner',     script: 'agent/planner.py',     interpreter: 'python3', watch: false, autorestart: true, cwd: './', max_memory_restart: '150M', log_file: 'agent/logs/planner.log',     error_file: 'agent/logs/planner-error.log' },
-    { name: 'ghost-learner',     script: 'agent/learner.py',     interpreter: 'python3', watch: false, autorestart: true, cwd: './', max_memory_restart: '150M', log_file: 'agent/logs/learner.log',     error_file: 'agent/logs/learner-error.log' },
-    { name: 'ghost-goals',       script: 'agent/goals.py',       interpreter: 'python3', watch: false, autorestart: true, cwd: './', max_memory_restart: '100M', log_file: 'agent/logs/goals.log',       error_file: 'agent/logs/goals-error.log' },
-    { name: 'ghost-pipeline',    script: 'agent/pipeline.py',    interpreter: 'python3', watch: false, autorestart: true, cwd: './', max_memory_restart: '100M', log_file: 'agent/logs/pipeline.log',    error_file: 'agent/logs/pipeline-error.log' },
-    { name: 'ghost-miner',       script: 'agent/miner.py',       interpreter: 'python3', watch: false, autorestart: true, cwd: './', max_memory_restart: '150M', log_file: 'agent/logs/miner.log',       error_file: 'agent/logs/miner-error.log' },
-    // Phases 16-19
-    { name: 'ghost-swarm',       script: 'agent/swarm_router.py',       interpreter: 'python3', watch: false, autorestart: true, cwd: './', max_memory_restart: '150M', log_file: 'agent/logs/swarm.log',       error_file: 'agent/logs/swarm-error.log' },
-    { name: 'ghost-validator',   script: 'agent/validator.py',          interpreter: 'python3', watch: false, autorestart: true, cwd: './', max_memory_restart: '100M', log_file: 'agent/logs/validator.log',   error_file: 'agent/logs/validator-error.log' },
-    { name: 'ghost-computer-use',script: 'agent/computer_use.py',       interpreter: 'python3', watch: false, autorestart: true, cwd: './', max_memory_restart: '200M', log_file: 'agent/logs/computer_use.log',error_file: 'agent/logs/computer_use-error.log' },
-    { name: 'ghost-consciousness',script: 'agent/consciousness_bridge.py',interpreter: 'python3',watch: false, autorestart: true, cwd: './', max_memory_restart: '150M', log_file: 'agent/logs/consciousness.log',error_file: 'agent/logs/consciousness-error.log' },
-    { name: 'ghost-optimizer',   script: 'agent/optimizer.py',           interpreter: 'python3', watch: false, autorestart: true, cwd: './', max_memory_restart: '150M', log_file: 'agent/logs/optimizer.log',    error_file: 'agent/logs/optimizer-error.log' },
-    // Queen orchestrateur (démarre en dernier)
-    { name: 'ghost-queen-py',    script: 'agent/queen.py',       interpreter: 'python3', watch: false, autorestart: true, cwd: './', max_memory_restart: '300M', log_file: 'agent/logs/queen_py.log',    error_file: 'agent/logs/queen_py-error.log' },
+
+    // ── 5. Ruche-corps Bridge — outils Python :8020 ─────────────────────────
+    {
+      name: 'ruche-bridge',
+      script: 'agent/ruche_bridge_server.py',
+      interpreter: 'python3',
+      watch: false,
+      autorestart: true,
+      restart_delay: 5000,
+      max_memory_restart: '200M',
+      log_file: 'agent/logs/ruche_bridge.log',
+      error_file: 'agent/logs/ruche_bridge-error.log',
+    },
+
+    // ── 6. MCP Compressor ───────────────────────────────────────────────────
+    {
+      name: 'pico-compressor',
+      script: 'mcp_servers/mcp-compressor/index.js',
+      watch: false,
+      autorestart: true,
+      max_memory_restart: '100M',
+      log_file: '.laruche/logs/compressor.log',
+      error_file: '.laruche/logs/compressor-error.log',
+    },
   ],
 };

@@ -1,0 +1,13 @@
+{
+  "name": "google-workspace",
+  "description": "Gmail + Google Calendar via OAuth2 — listEmails, sendEmail, listEvents",
+  "version": "1.0.0",
+  "tier": "core",
+  "category": "integration",
+  "author": "jarvis-architect",
+  "tags": ["google", "gmail", "calendar", "oauth2", "email"],
+  "env_required": ["GOOGLE_CLIENT_ID", "GOOGLE_CLIENT_SECRET"],
+  "env_optional": ["GOOGLE_REDIRECT_URI"],
+  "vault": "vault/google-token.json",
+  "actions": ["listEmails", "sendEmail", "listEvents"]
+}

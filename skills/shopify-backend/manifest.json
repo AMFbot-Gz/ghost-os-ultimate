@@ -1,0 +1,11 @@
+{
+  "name": "shopify-backend",
+  "description": "Shopify Admin API — getOrders, getProducts, updateInventory",
+  "version": "1.0.0",
+  "tier": "core",
+  "category": "integration",
+  "author": "jarvis-architect",
+  "tags": ["shopify", "ecommerce", "orders", "products", "inventory"],
+  "env_required": ["SHOPIFY_STORE_URL", "SHOPIFY_API_KEY"],
+  "actions": ["getOrders", "getProducts", "updateInventory"]
+}

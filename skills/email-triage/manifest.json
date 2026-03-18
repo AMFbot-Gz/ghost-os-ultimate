@@ -1,0 +1,11 @@
+{
+  "name": "email-triage",
+  "description": "Triage intelligent des emails Gmail — urgent/normal/spam, rapport Telegram-ready",
+  "version": "1.0.0",
+  "tier": "core",
+  "category": "productivity",
+  "author": "jarvis-architect",
+  "tags": ["email", "triage", "gmail", "classification", "urgent"],
+  "depends_on": ["google-workspace"],
+  "actions": ["triage", "fetchRecent"]
+}

@@ -379,7 +379,7 @@ async def telegram_polling_loop():
     """Boucle de polling Telegram — long-polling 25s (0 latence, 0 CPU idle). P0.3."""
     # Guard anti-409 : n'activer le polling Python que si TELEGRAM_MODE=python
     TELEGRAM_MODE = os.environ.get("TELEGRAM_MODE", "node")
-    if TELEGRAM_MODE not in ("python",):
+    if TELEGRAM_MODE not in ("python",) or TELEGRAM_MODE == "gateway":
         print(f"[Queen] Telegram géré par Node.js (TELEGRAM_MODE={TELEGRAM_MODE}) — handler Python désactivé")
         return
 
