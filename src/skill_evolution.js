@@ -257,7 +257,7 @@ describe("${skillName}", () => {
     skill: skillName,
     tier,
     path: skillDir,
-    files_created: ["manifest.yaml", "SKILL.md", "index.js", "skill.js", `tests/skills/${skillName}.test.js`],
+    files_created: ["manifest.json", "SKILL.md", "index.js", "skill.js", `tests/skills/${skillName}.test.js`],
     performance_prediction: { first_call_ms: 500, cached_call_ms: "<1", cache_strategy: "SHA-256" },
   };
 }
