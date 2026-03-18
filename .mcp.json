@@ -1,12 +1,60 @@
 {
   "mcpServers": {
+    "filesystem": {
+      "type": "stdio",
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-filesystem",
+        "/Users/wiaamhadara/ghost-os-ultimate",
+        "/Users/wiaamhadara/LaRuche",
+        "/Users/wiaamhadara/Projects",
+        "/Users/wiaamhadara/Desktop",
+        "/Users/wiaamhadara/Downloads"
+      ]
+    },
+    "github": {
+      "type": "stdio",
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-github"],
+      "env": {
+        "GITHUB_PERSONAL_ACCESS_TOKEN": ""
+      }
+    },
+    "memory": {
+      "type": "stdio",
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-memory"]
+    },
+    "queen-terminal": {
+      "type": "stdio",
+      "command": "node",
+      "args": ["/Users/wiaamhadara/ghost-os-ultimate/mcp_servers/terminal_mcp.js"]
+    },
+    "skills": {
+      "type": "stdio",
+      "command": "node",
+      "args": ["/Users/wiaamhadara/ghost-os-ultimate/mcp_servers/skill_factory_mcp.js"]
+    },
+    "vision": {
+      "type": "stdio",
+      "command": "node",
+      "args": ["/Users/wiaamhadara/ghost-os-ultimate/mcp_servers/vision_mcp.js"]
+    },
+    "vault": {
+      "type": "stdio",
+      "command": "node",
+      "args": ["/Users/wiaamhadara/ghost-os-ultimate/mcp_servers/vault_mcp.js"]
+    },
+    "os-control": {
+      "type": "stdio",
+      "command": "node",
+      "args": ["/Users/wiaamhadara/ghost-os-ultimate/mcp_servers/os_control_mcp.js"]
+    },
     "pencil": {
       "type": "stdio",
       "command": "/Applications/Pencil.app/Contents/Resources/app.asar.unpacked/out/mcp-server-darwin-x64",
-      "args": [
-        "--app",
-        "desktop"
-      ],
+      "args": ["--app", "desktop"],
       "env": {}
     }
   }

@@ -9,7 +9,11 @@ import dotenv from 'dotenv';
 import { createRequire } from 'module';
 import { resolve, dirname } from 'path';
 import { fileURLToPath } from 'url';
-import { readFileSync, writeFileSync, existsSync } from 'fs';
+import { readFileSync, writeFileSync, existsSync, createReadStream } from 'fs';
+import {
+  takeScreenshot, openApp, goToUrl, typeText, smartClick,
+  extractAppName, extractUrl, decomposeCommand, executeSteps, runCUSession,
+} from './mac-control.js';
 
 dotenv.config();
 
@@ -82,13 +86,16 @@ async function learnFromMission(command, intentAgent, skillName, result, duratio
 // ─── Intent Engine ────────────────────────────────────────────────────────────
 // Analyse le texte naturel et mappe vers skill ou agent
 const INTENT_PATTERNS = [
-  { pattern: /screenshot|capture|écran/i,         intent: 'take_screenshot',        risk: false },
+  // ── Actions Mac directes (bypass Queen) ──
+  { pattern: /screenshot|capture\s*d.?écran|prends?\s+un\s+(screenshot|photo)|photographie\s+l.?écran/i, intent: 'take_screenshot', risk: false, direct: true },
+  { pattern: /^(ouvre|lance|démarre|start|open)\s+\w/i,          intent: 'open_app',        risk: false, direct: true },
+  { pattern: /va\s+sur|navigue\s+vers|ouvre\s+\w+\.(com|fr|io)/i, intent: 'goto_url',       risk: false, direct: true },
+  { pattern: /^(tape|écris|saisis)\s+/i,                          intent: 'type_text',       risk: false, direct: true },
+  { pattern: /^(clique|click)\s+(sur\s+)?/i,                      intent: 'smart_click',     risk: false, direct: true },
+  // ── Commandes métier → Queen ──
   { pattern: /mail|email|gmail/i,                  intent: 'email-triage',           risk: false },
-  { pattern: /google|agenda|calendar|events?/i,    intent: 'google-workspace',       risk: false },
+  { pattern: /agenda|calendar|events?/i,           intent: 'google-workspace',       risk: false },
   { pattern: /shopify|commande?s?|orders?|stock/i, intent: 'shopify-backend',        risk: false },
-  { pattern: /ouvre|lance|open|app/i,              intent: 'open_app',               risk: false },
-  { pattern: /clique|click/i,                      intent: 'smart_click',            risk: false },
-  { pattern: /tape|écris|type/i,                   intent: 'type_text',              risk: false },
   { pattern: /shell|commande|run|execute/i,         intent: 'run_shell',              risk: true  },
   { pattern: /supprime|delete|rm |efface/i,         intent: 'run_shell',              risk: true  },
   { pattern: /status|état|health/i,                 intent: '_status',                risk: false },
@@ -98,10 +105,17 @@ const INTENT_PATTERNS = [
 ];
 
 function detectIntent(text) {
-  for (const { pattern, intent, risk } of INTENT_PATTERNS) {
-    if (pattern.test(text)) return { intent, risk };
+  // Détection multi-étapes : 2+ actions séparées par virgules/puis/ensuite
+  const parts = text.split(/,|\bpuis\b|\bensuite\b/i).map(s => s.trim()).filter(s => s.length > 2);
+  if (parts.length >= 2) {
+    const steps = decomposeCommand(text);
+    if (steps.length >= 2) return { intent: 'multi_step', risk: false, direct: true };
   }
-  return { intent: 'mission', risk: false }; // fallback → mission générale
+
+  for (const { pattern, intent, risk, direct } of INTENT_PATTERNS) {
+    if (pattern.test(text)) return { intent, risk, direct: direct || false };
+  }
+  return { intent: 'mission', risk: false, direct: false }; // fallback → mission générale
 }
 
 // Charger les fast-paths appris et les injecter dans l'intent engine
@@ -180,7 +194,7 @@ bot.on('text', async (ctx) => {
   }
 
   const text = ctx.message.text;
-  const { intent, risk } = detectIntent(text);
+  const { intent, risk, direct } = detectIntent(text);
 
   // Commandes internes
   if (intent === '_status') {
@@ -216,7 +230,6 @@ bot.on('text', async (ctx) => {
   // Action risquée → HITL
   if (risk) {
     return hitlConfirm(ctx, text, async () => {
-      const typing = ctx.sendChatAction('typing');
       try {
         const result = await callQueenMission(text);
         await sendMissionReport(ctx, text, result, null, intent);
@@ -224,6 +237,14 @@ bot.on('text', async (ctx) => {
         ctx.reply(`❌ Erreur mission : ${e.message}`);
       }
     });
+  }
+
+  // ── Actions directes Mac (bypass Queen) ──────────────────────────────────
+  if (direct) {
+    await ctx.sendChatAction('typing');
+    const t0 = Date.now();
+    await executeMacAction(ctx, intent, text, t0);
+    return;
   }
 
   // Mission normale → Queen
@@ -236,6 +257,112 @@ bot.on('text', async (ctx) => {
     await ctx.reply(`❌ Erreur : ${e.message}`);
   }
 });
+
+// ─── Envoi de screenshot sur Telegram ────────────────────────────────────────
+
+async function sendScreenshotToTelegram(ctx, screenshotPath, caption = '') {
+  try {
+    await ctx.replyWithPhoto(
+      { source: createReadStream(screenshotPath) },
+      { caption: caption || '📸 Screenshot' },
+    );
+  } catch (e) {
+    await ctx.reply(`⚠️ Screenshot pris mais envoi échoué : ${e.message}\nChemin : \`${screenshotPath}\``, { parse_mode: 'Markdown' });
+  }
+}
+
+// ─── Exécution directe d'actions Mac ─────────────────────────────────────────
+
+async function executeMacAction(ctx, intent, text, t0) {
+  try {
+    switch (intent) {
+
+      // ── Screenshot ─────────────────────────────────────────────────────────
+      case 'take_screenshot': {
+        const ss = await takeScreenshot();
+        const dur = ((Date.now() - t0) / 1000).toFixed(1);
+        if (ss.error) {
+          await ctx.reply(`❌ Screenshot échoué : ${ss.error}`);
+        } else {
+          await sendScreenshotToTelegram(ctx, ss.path, `📸 Screenshot (${dur}s) — ${ss.width}×${ss.height}`);
+        }
+        break;
+      }
+
+      // ── Ouvrir une app ─────────────────────────────────────────────────────
+      case 'open_app': {
+        const appName = extractAppName(text);
+        const res = await openApp(appName);
+        const dur = ((Date.now() - t0) / 1000).toFixed(1);
+        await ctx.reply(`${res.success ? '✅' : '❌'} ${res.message || res.error}\n⏱ ${dur}s\n🔧 mac-control/open_app`);
+        break;
+      }
+
+      // ── Aller sur une URL ──────────────────────────────────────────────────
+      case 'goto_url': {
+        const url = extractUrl(text);
+        if (!url) { await ctx.reply(`❌ URL non reconnue dans : "${text}"`); break; }
+        const res = await goToUrl(url);
+        const dur = ((Date.now() - t0) / 1000).toFixed(1);
+        // Prendre un screenshot après navigation
+        await ctx.reply(`${res.success ? '✅' : '❌'} ${res.message || res.error}\n⏱ ${dur}s`);
+        if (res.success) {
+          await new Promise(r => setTimeout(r, 1500));
+          const ss = await takeScreenshot();
+          if (!ss.error) await sendScreenshotToTelegram(ctx, ss.path, `🌐 ${url}`);
+        }
+        break;
+      }
+
+      // ── Taper du texte ─────────────────────────────────────────────────────
+      case 'type_text': {
+        const match = text.match(/(?:tape|écris|saisis)\s+(.+)/i);
+        const toType = match ? match[1] : text;
+        const res = await typeText(toType);
+        const dur = ((Date.now() - t0) / 1000).toFixed(1);
+        await ctx.reply(`${res.success ? '✅' : '❌'} ${res.message}\n⏱ ${dur}s\n🔧 mac-control/type_text`);
+        break;
+      }
+
+      // ── Cliquer sur un élément ─────────────────────────────────────────────
+      case 'smart_click': {
+        const match = text.match(/(?:clique|click)(?:\s+sur)?\s+(.+)/i);
+        const query = match ? match[1] : text;
+        const res = await smartClick(query);
+        const dur = ((Date.now() - t0) / 1000).toFixed(1);
+        await ctx.reply(`${res.success ? '✅' : '❌'} ${res.message || res.error}\n⏱ ${dur}s\n🔧 mac-control/smart_click`);
+        break;
+      }
+
+      // ── Multi-étapes ───────────────────────────────────────────────────────
+      case 'multi_step': {
+        const steps = decomposeCommand(text);
+        await ctx.reply(`🔄 *${steps.length} étapes détectées*\n${steps.map((s, i) => `${i+1}. ${s.raw}`).join('\n')}`, { parse_mode: 'Markdown' });
+
+        const { results, lastScreenshotPath } = await executeSteps(steps);
+        const dur = ((Date.now() - t0) / 1000).toFixed(1);
+
+        const summary = results.map(r => `${r.ok ? '✅' : '❌'} ${r.message}`).join('\n');
+        await ctx.reply(`*Mission multi-étapes* (${dur}s)\n\n${summary}`, { parse_mode: 'Markdown' });
+
+        if (lastScreenshotPath) {
+          await sendScreenshotToTelegram(ctx, lastScreenshotPath, '📸 Résultat final');
+        }
+        break;
+      }
+
+      default:
+        await ctx.reply(`❓ Intent direct inconnu : ${intent}`);
+    }
+
+    // Learning
+    learnFromMission(text, intent, intent, { success: true }, Date.now() - t0).catch(() => {});
+
+  } catch (e) {
+    await ctx.reply(`❌ Erreur Mac : ${e.message}`);
+    console.error(`[Gateway] executeMacAction error:`, e);
+  }
+}
 
 // ─── Rapport de mission structuré ─────────────────────────────────────────────
 async function sendMissionReport(ctx, command, result, duration_ms, intentObj) {
