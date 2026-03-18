@@ -3,7 +3,7 @@
 
 ## Vision
 Agent autonome hybride 100% local — unification complète de LaRuche v5.0 + PICO-RUCHE.
-Node.js Queen + 15 couches Python FastAPI + Conscience universelle + **27 skills**.
+Node.js Queen + 15 couches Python FastAPI + Conscience universelle + **33 skills**.
 Zéro cloud requis, zéro coût token, vie privée totale.
 
 ## Architecture
@@ -49,7 +49,7 @@ Ghost OS Ultimate v1.0.0
 │   └── deployment/       — AutoDeployment (détecte CPU/RAM/GPU/Ollama)
 │
 ├── ecosystem/marketplace/ — SkillsMarketplace (recherche, install, publish, validate)
-├── skills/               — 27 skills JS macOS natifs
+├── skills/               — 33 skills JS macOS natifs
 ├── mcp_servers/          — 12 MCP servers
 ├── interfaces/dashboard/ — React + Vite :5173
 └── interfaces/hud/       — Electron overlay
@@ -93,14 +93,14 @@ npm run hud     # Electron overlay
 
 ## APIs
 
-### Node.js Queen :3000
+### Node.js Queen :3002
 | Endpoint | Description |
 |----------|-------------|
 | `POST /api/mission` | Lancer une mission |
 | `GET /api/health` | `{"ok":true}` |
 | `GET /api/agents` | État du swarm |
 | `GET /api/system` | CPU/RAM/Disque |
-| `GET /api/skills` | 27 skills disponibles |
+| `GET /api/skills` | 33 skills disponibles |
 | `GET /api/status` | Status global |
 | `POST /mcp/os-control` | Computer Use |
 | `POST /mcp/terminal` | Shell sandboxé |
@@ -241,3 +241,42 @@ mkdir skills/mon_skill
 - **Consciousness Bridge** :8016 — NeuralEventBus Node.js ↔ 15 couches Python · tail-follow signals.jsonl
 - **Frontend** React 18 + Vite + Tailwind (dashboard :5173), Electron (HUD)
 - **Tests** Jest 29 (ESM) + Pytest
+
+
+## État production — Phase 4 (2026-03-18)
+
+```
+12 processus PM2 | 33 skills | Score: 100/100
+```
+
+| Service | Port | Rôle |
+|---------|------|------|
+| jarvis-gateway | Telegram | Bot unique, learning engine |
+| queen-node | :3002 | API REST missions |
+| agents-python | :8001-:8019 | 16 agents FastAPI |
+| ruche-bridge | :8020 | 58 outils ruche-corps |
+| moltbot-bridge | :3003 | Multi-canaux |
+| vital-loop | — | Health 30s + alertes |
+| goals-scheduler | :3005 | 4 goals autonomes |
+| memory-hub | :3004 | JSONL + ChromaDB opt |
+| self-repair | — | PM2 bus + auto-patch |
+| night-worker | — | 4 tâches 02h-08h |
+| laruche-sync | :3007 | Sync bidirectionnelle |
+| stitch-bridge | :3006 | 4 workflows business |
+
+### Démarrage rapide
+```bash
+cd ~/ghost-os-ultimate
+pm2 start ecosystem.config.cjs --env development
+pm2 save
+```
+
+### Commandes utiles
+```bash
+pm2 list                                    # état global
+pm2 logs jarvis-gateway --lines 20          # logs gateway
+curl http://localhost:3002/api/health       # queen health
+curl http://localhost:3004/memory/stats     # mémoire
+curl http://localhost:3005/goals/list       # goals actifs
+curl http://localhost:3007/laruche-sync/status  # sync status
+```

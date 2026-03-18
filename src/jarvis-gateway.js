@@ -94,6 +94,7 @@ const INTENT_PATTERNS = [
   { pattern: /status|état|health/i,                 intent: '_status',                risk: false },
   { pattern: /skills?/i,                            intent: '_list_skills',           risk: false },
   { pattern: /aide|help|\?$/i,                      intent: '_help',                  risk: false },
+  { pattern: /\b(vente|crm|pipeline|appel de vente|prospect|lead|rapport ventes?|commercial)\b/i, agent: 'queen-node', skill: 'stitch-workflows' },
 ];
 
 function detectIntent(text) {

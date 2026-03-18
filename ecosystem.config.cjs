@@ -15,6 +15,8 @@
  *  10. memory-hub        — Hub mémoire unifié (:3004)
  *  11. self-repair       — Auto-repair engine (PM2 bus + brain patches)
  *  12. night-worker      — Worker nocturne (02h-07h30 cron tasks)
+ *  13. stitch-bridge     — Workflows stitch (vente/CRM/pipeline) :3006
+ *  14. laruche-sync      — Sync bidirectionnel LaRuche ↔ ghost-os :3007
  *
  * RÈGLE : UN SEUL processus écoute Telegram = jarvis-gateway
  */
@@ -292,6 +294,60 @@ module.exports = {
       },
       log_file: '.laruche/logs/night-worker.log',
       error_file: '.laruche/logs/night-worker-error.log',
+      log_date_format: 'YYYY-MM-DD HH:mm:ss',
+      merge_logs: true,
+    },
+
+    // ── 13. Stitch Bridge — workflows vente/CRM :3006 ────────────────────────
+    {
+      name: 'stitch-bridge',
+      script: 'src/stitch-bridge.js',
+      interpreter: 'node',
+      watch: false,
+      autorestart: true,
+      restart_delay: 5000,
+      max_memory_restart: '100M',
+      env_production: {
+        NODE_ENV: 'production',
+        TELEGRAM_MODE: 'gateway',
+        STITCH_BRIDGE_PORT: '3006',
+        STITCH_URL: 'http://localhost:3010',
+      },
+      env_development: {
+        NODE_ENV: 'development',
+        TELEGRAM_MODE: 'gateway',
+        STITCH_BRIDGE_PORT: '3006',
+        STITCH_URL: 'http://localhost:3010',
+      },
+      log_file: '.laruche/logs/stitch-bridge.log',
+      error_file: '.laruche/logs/stitch-bridge-error.log',
+      log_date_format: 'YYYY-MM-DD HH:mm:ss',
+      merge_logs: true,
+    },
+
+    // ── 14. LaRuche Sync — bidirectionnel :3007 ───────────────────────────────
+    {
+      name: 'laruche-sync',
+      script: 'src/laruche-sync.js',
+      interpreter: 'node',
+      watch: false,
+      autorestart: true,
+      restart_delay: 5000,
+      max_memory_restart: '100M',
+      env_production: {
+        NODE_ENV: 'production',
+        TELEGRAM_MODE: 'gateway',
+        LARUCHE_SYNC_PORT: '3007',
+        LARUCHE_URL: 'http://localhost:3000',
+      },
+      env_development: {
+        NODE_ENV: 'development',
+        TELEGRAM_MODE: 'gateway',
+        LARUCHE_SYNC_PORT: '3007',
+        LARUCHE_URL: 'http://localhost:3000',
+      },
+      log_file: '.laruche/logs/laruche-sync.log',
+      error_file: '.laruche/logs/laruche-sync-error.log',
       log_date_format: 'YYYY-MM-DD HH:mm:ss',
       merge_logs: true,
     },

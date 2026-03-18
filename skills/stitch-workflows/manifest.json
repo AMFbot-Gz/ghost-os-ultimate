@@ -1,0 +1,9 @@
+{
+  "name": "stitch-workflows",
+  "description": "Déclenche les workflows stitch: analyse vente, CRM, rapport, lead scoring",
+  "version": "1.0.0",
+  "tier": "community",
+  "category": "business",
+  "created": "2026-03-18T00:00:00.000Z",
+  "tags": ["stitch", "vente", "crm", "pipeline", "workflow", "business"]
+}

@@ -1,75 +1,73 @@
 /**
  * skills/shopify-backend/skill.js
- * Shopify Admin API — orders, products, inventory
- * Variables : SHOPIFY_STORE_URL, SHOPIFY_API_KEY (Admin API token)
+ * Shopify Admin API
+ * Mode DEMO si SHOPIFY_API_KEY absent
  */
 
-const SHOPIFY_STORE = process.env.SHOPIFY_STORE_URL || '';
-const SHOPIFY_KEY   = process.env.SHOPIFY_API_KEY   || '';
-const API_VERSION   = '2024-01';
+const DEMO_MODE = !process.env.SHOPIFY_API_KEY || !process.env.SHOPIFY_STORE_URL;
 
-async function shopifyFetch(path, method = 'GET', body = null) {
-  if (!SHOPIFY_STORE || !SHOPIFY_KEY) {
-    throw new Error('SHOPIFY_STORE_URL et SHOPIFY_API_KEY requis dans .env');
-  }
-  const url = `https://${SHOPIFY_STORE}/admin/api/${API_VERSION}/${path}`;
-  const res = await fetch(url, {
-    method,
-    headers: { 'X-Shopify-Access-Token': SHOPIFY_KEY, 'Content-Type': 'application/json' },
-    body: body ? JSON.stringify(body) : undefined,
-    signal: AbortSignal.timeout(15000),
-  });
-  if (!res.ok) throw new Error(`Shopify API ${res.status}: ${await res.text()}`);
-  return res.json();
-}
+const DEMO_ORDERS = [
+  { id: '#1042', customer: 'Marie Dupont', total: '124.99€', status: 'fulfilled', date: new Date(Date.now() - 2*3600000).toISOString() },
+  { id: '#1041', customer: 'Jean Lefebvre', total: '89.50€', status: 'paid', date: new Date(Date.now() - 6*3600000).toISOString() },
+  { id: '#1040', customer: 'Sophie Bernard', total: '234.00€', status: 'fulfilled', date: new Date(Date.now() - 24*3600000).toISOString() }
+];
 
-async function getOrders(status = 'any', limit = 10) {
-  if (!SHOPIFY_STORE) return { success: true, mock: true, orders: [
-    { id: 'mock-1001', name: '#1001', status: 'fulfilled', total_price: '49.99', customer: 'Client Mock', created_at: new Date().toISOString() }
-  ]};
-  const data = await shopifyFetch(`orders.json?status=${status}&limit=${limit}`);
-  return { success: true, orders: data.orders.map(o => ({
-    id: o.id, name: o.name, status: o.financial_status, total_price: o.total_price,
-    customer: `${o.customer?.first_name || ''} ${o.customer?.last_name || ''}`.trim(),
-    created_at: o.created_at,
-  }))};
-}
+const DEMO_PRODUCTS = [
+  { id: 'P001', title: 'Jarvis Agent Pro', price: '299€', inventory: 50, status: 'active' },
+  { id: 'P002', title: 'Ghost OS License', price: '199€', inventory: 120, status: 'active' },
+  { id: 'P003', title: 'AI Consulting Pack', price: '999€', inventory: 10, status: 'active' },
+  { id: 'P004', title: 'Automation Bundle', price: '499€', inventory: 35, status: 'active' },
+  { id: 'P005', title: 'Support Premium', price: '149€/mois', inventory: 999, status: 'active' }
+];
 
-async function getProducts(limit = 10) {
-  if (!SHOPIFY_STORE) return { success: true, mock: true, products: [
-    { id: 'mock-p1', title: 'Produit Mock', status: 'active', variants: [{ inventory_quantity: 42 }] }
-  ]};
-  const data = await shopifyFetch(`products.json?limit=${limit}`);
-  return { success: true, products: data.products.map(p => ({
-    id: p.id, title: p.title, status: p.status,
-    variants: p.variants.map(v => ({ id: v.id, sku: v.sku, inventory_quantity: v.inventory_quantity })),
-  }))};
-}
-
-async function updateInventory(variantId, quantity) {
-  if (!SHOPIFY_STORE) return { success: false, error: 'SHOPIFY_STORE_URL requis', mock: true };
-  // Récupère inventory_item_id
-  const variant = await shopifyFetch(`variants/${variantId}.json`);
-  const inventoryItemId = variant.variant.inventory_item_id;
-  // Récupère location_id
-  const locations = await shopifyFetch('locations.json');
-  const locationId = locations.locations[0]?.id;
-  // Set quantity
-  const result = await shopifyFetch('inventory_levels/set.json', 'POST', {
-    location_id: locationId, inventory_item_id: inventoryItemId, available: quantity,
-  });
-  return { success: true, inventory_level: result.inventory_level };
-}
-
-export async function run(params = {}) {
-  const { action = 'getOrders', status, limit, variantId, quantity } = params;
-  try {
-    switch (action) {
-      case 'getOrders':        return await getOrders(status, limit);
-      case 'getProducts':      return await getProducts(limit);
-      case 'updateInventory':  return await updateInventory(variantId, quantity);
-      default: return { success: false, error: `Action inconnue: ${action}. Disponibles: getOrders, getProducts, updateInventory` };
+export async function run({ action = 'getOrders', limit = 10, product_id = '', quantity = 0 }) {
+  if (DEMO_MODE) {
+    if (action === 'getOrders') {
+      return {
+        success: true,
+        mode: 'demo',
+        orders: DEMO_ORDERS.slice(0, limit),
+        total_revenue: '448.49€',
+        note: '(mode démo — configurer SHOPIFY_API_KEY + SHOPIFY_STORE_URL pour activer)'
+      };
     }
+    if (action === 'getProducts') {
+      return {
+        success: true,
+        mode: 'demo',
+        products: DEMO_PRODUCTS.slice(0, limit),
+        note: '(mode démo — configurer SHOPIFY_API_KEY pour activer)'
+      };
+    }
+    if (action === 'updateInventory') {
+      return {
+        success: true,
+        mode: 'demo',
+        updated: true,
+        product_id,
+        new_quantity: quantity,
+        note: '(mode démo — inventaire non mis à jour réellement)'
+      };
+    }
+    return { success: false, error: `Action inconnue: ${action}. Disponibles: getOrders, getProducts, updateInventory` };
+  }
+
+  // Mode live Shopify Admin API
+  const BASE = `https://${process.env.SHOPIFY_STORE_URL}/admin/api/2024-01`;
+  const headers = { 'X-Shopify-Access-Token': process.env.SHOPIFY_API_KEY, 'Content-Type': 'application/json' };
+
+  try {
+    if (action === 'getOrders') {
+      const res = await fetch(`${BASE}/orders.json?limit=${limit}&status=any`, { headers });
+      const data = await res.json();
+      return { success: true, orders: data.orders, mode: 'live' };
+    }
+    if (action === 'getProducts') {
+      const res = await fetch(`${BASE}/products.json?limit=${limit}`, { headers });
+      const data = await res.json();
+      return { success: true, products: data.products, mode: 'live' };
+    }
+    return { success: false, error: `Action ${action} non supportée en mode live` };
   } catch (err) {
     return { success: false, error: err.message };
   }

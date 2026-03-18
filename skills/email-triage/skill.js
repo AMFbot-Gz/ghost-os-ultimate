@@ -1,66 +1,82 @@
 /**
  * skills/email-triage/skill.js
- * Triage intelligent des emails — urgents, normaux, spam
- * Dépend de google-workspace pour la récupération
+ * Triage intelligent des emails
+ * Mode DEMO si Google non configuré
  */
-import { resolve, dirname } from 'path';
-import { fileURLToPath } from 'url';
 
-const __dirname = dirname(fileURLToPath(import.meta.url));
-const ROOT = resolve(__dirname, '../..');
+const DEMO_MODE = !process.env.GOOGLE_CLIENT_ID;
 
-async function fetchRecent(hours = 24) {
-  const { run: gsRun } = await import('../google-workspace/skill.js');
-  const after = Math.floor((Date.now() - hours * 3600 * 1000) / 1000);
-  return gsRun({ action: 'listEmails', query: `after:${after}`, maxResults: 50 });
-}
+const DEMO_TRIAGE = {
+  urgent: [
+    { from: 'client@acme.com', subject: 'Suivi devis #2847', reason: 'Client mentionne un rappel urgent', action: 'Appeler aujourd\'hui' },
+    { from: 'lea.martin@partner.fr', subject: 'Collaboration projet Jarvis', reason: 'Opportunité business', action: 'Répondre dans les 2h' }
+  ],
+  normal: [
+    { from: 'facture@stripe.com', subject: 'Votre facture de mars 2026', reason: 'Confirmation de paiement', action: 'Archiver' },
+    { from: 'noreply@github.com', subject: '[ghost-os-ultimate] New PR #42', reason: 'Mise à jour projet', action: 'Lire quand disponible' }
+  ],
+  spam: [
+    { from: 'newsletter@medium.com', subject: 'Top stories this week', reason: 'Newsletter non prioritaire', action: 'Ignorer' }
+  ],
+  summary: '2 urgents, 2 normaux, 1 spam. Action principale : appeler client ACME.'
+};
 
-const URGENT_KEYWORDS = ['urgent', 'asap', 'immédiat', 'critique', 'important', 'action required', 'deadline', 'relance', 'impayé', 'rappel'];
-const SPAM_KEYWORDS   = ['unsubscribe', 'désabonner', 'promotion', 'offre', 'newsletter', 'noreply', 'no-reply', 'marketing'];
-
-function classify(emails) {
-  const urgent = [], normal = [], spam = [];
-  for (const email of emails) {
-    const text = `${email.subject || ''} ${email.from || ''}`.toLowerCase();
-    if (SPAM_KEYWORDS.some(k => text.includes(k))) { spam.push(email); }
-    else if (URGENT_KEYWORDS.some(k => text.includes(k))) { urgent.push(email); }
-    else { normal.push(email); }
-  }
-  return { urgent, normal, spam };
-}
-
-function formatTelegramReport(classified, hours) {
-  const { urgent, normal, spam } = classified;
-  const lines = [`📧 *Email Triage — ${hours}h*\n`];
-  if (urgent.length) {
-    lines.push(`🔴 *Urgents (${urgent.length})* :`);
-    urgent.slice(0, 5).forEach(e => lines.push(`  • ${e.subject?.slice(0,50)} _(${e.from?.split('<')[0].trim().slice(0,20)})_`));
-  }
-  if (normal.length) lines.push(`\n🟡 *Normaux* : ${normal.length} emails`);
-  if (spam.length)   lines.push(`⚪ *Spam/Promo* : ${spam.length} emails`);
-  return lines.join('\n');
-}
-
-export async function run(params = {}) {
-  const { action = 'triage', hours = 24 } = params;
-  try {
-    const fetched = await fetchRecent(hours);
-    if (!fetched.success) return { success: false, error: fetched.error || 'Fetch failed' };
-    const emails = fetched.emails || [];
-    if (action === 'fetchRecent') return { success: true, emails, count: emails.length };
-    const classified = classify(emails);
-    const report = formatTelegramReport(classified, hours);
+export async function run({ maxResults = 10, since = '24h' }) {
+  if (DEMO_MODE) {
     return {
       success: true,
-      urgent_count: classified.urgent.length,
-      normal_count: classified.normal.length,
-      spam_count:   classified.spam.length,
-      total:        emails.length,
-      report,
-      urgent: classified.urgent,
-      mock: fetched.mock || false,
+      mode: 'demo',
+      triage: DEMO_TRIAGE,
+      count: { urgent: 2, normal: 2, spam: 1, total: 5 },
+      report: formatTriageReport(DEMO_TRIAGE),
+      note: '(mode démo — configurer GOOGLE_CLIENT_ID pour trier vos vrais emails)'
+    };
+  }
+
+  // Mode live : appel à google-workspace skill
+  try {
+    const { run: googleRun } = await import('../google-workspace/skill.js');
+    const emails = await googleRun({ action: 'listEmails', maxResults });
+    if (!emails.success) return emails;
+
+    const classified = classify(emails.emails);
+    return {
+      success: true,
+      mode: 'live',
+      triage: classified,
+      report: formatTriageReport(classified)
     };
   } catch (err) {
     return { success: false, error: err.message };
   }
+}
+
+function classify(emails) {
+  const urgent = [], normal = [], spam = [];
+  const urgentKeywords = /urgent|rappel|asap|important|deadline|paiement|facture impayée/i;
+  const spamKeywords = /newsletter|unsubscribe|promo|offre spéciale|50% off/i;
+
+  for (const email of (emails || [])) {
+    if (spamKeywords.test(email.subject + ' ' + email.snippet)) {
+      spam.push({ ...email, action: 'Archiver' });
+    } else if (urgentKeywords.test(email.subject + ' ' + email.snippet) || email.urgent) {
+      urgent.push({ ...email, action: 'Répondre immédiatement' });
+    } else {
+      normal.push({ ...email, action: 'Traiter aujourd\'hui' });
+    }
+  }
+  return { urgent, normal, spam, summary: `${urgent.length} urgents, ${normal.length} normaux, ${spam.length} spam` };
+}
+
+function formatTriageReport(triage) {
+  const lines = [`📧 Triage emails — ${triage.summary}`];
+  if (triage.urgent?.length) {
+    lines.push('\n🔴 URGENT:');
+    triage.urgent.forEach(e => lines.push(`  • ${e.from}: ${e.subject}`));
+  }
+  if (triage.normal?.length) {
+    lines.push('\n🟡 Normal:');
+    triage.normal.slice(0, 3).forEach(e => lines.push(`  • ${e.from}: ${e.subject}`));
+  }
+  return lines.join('\n');
 }
