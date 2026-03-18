@@ -39,6 +39,7 @@ const restartAttempts = new Map();
 const serviceStats    = new Map(); // { upCount, downCount, lastStatus }
 
 // Initialiser stats
+const STARTUP_GRACE_MS = 90_000; // 90s avant de tenter un restart (laisser PM2 démarrer)
 CHECKS.forEach(c => serviceStats.set(c.name, { upCount: 0, downCount: 0, lastStatus: 'unknown', firstSeen: Date.now() }));
 
 // ─── Utilitaires ────────────────────────────────────────────────────────────
@@ -100,8 +101,10 @@ async function runChecks() {
 
       if (svc.critical || svc.pm2) {
         const attempts = restartAttempts.get(svc.name) || 0;
+        const stats2 = serviceStats.get(svc.name);
+        const ageMs = Date.now() - (stats2?.firstSeen || Date.now());
 
-        if (attempts < 3 && svc.pm2) {
+        if (attempts < 3 && svc.pm2 && ageMs > STARTUP_GRACE_MS) {
           const backoff = [5000, 15000, 60000][attempts] || 60000;
           console.warn(`[VitalLoop] ${svc.name} DOWN — restart tentative ${attempts + 1}/3 (backoff ${backoff/1000}s)`);
           restartAttempts.set(svc.name, attempts + 1);

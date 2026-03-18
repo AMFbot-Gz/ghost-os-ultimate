@@ -111,6 +111,9 @@ def test_screencapture() -> bool:
     """Teste que screencapture fonctionne."""
     if platform.system() != "Darwin":
         return False
+    # Skip sous PM2 / headless (pas d'accès écran)
+    if os.environ.get("PM2_HOME") or os.environ.get("pm_id") or os.environ.get("PM2_USAGE"):
+        return False
     try:
         r = subprocess.run(
             ["screencapture", "-x", "-t", "png", "/tmp/ghost_preflight_test.png"],
@@ -118,7 +121,7 @@ def test_screencapture() -> bool:
         )
         p = Path("/tmp/ghost_preflight_test.png")
         return r.returncode == 0 and p.exists() and p.stat().st_size > 1000
-    except Exception:
+    except BaseException:  # KeyboardInterrupt n'est pas Exception
         return False
 
 
