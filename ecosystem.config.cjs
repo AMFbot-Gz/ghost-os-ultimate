@@ -17,6 +17,7 @@
  *  12. night-worker      — Worker nocturne (02h-07h30 cron tasks)
  *  13. stitch-bridge     — Workflows stitch (vente/CRM/pipeline) :3006
  *  14. laruche-sync      — Sync bidirectionnel LaRuche ↔ ghost-os :3007
+ *  15. pico-satellite    — Satellite PicoClaw Go lightweight agent (:8090)
  *
  * RÈGLE : UN SEUL processus écoute Telegram = jarvis-gateway
  */
@@ -30,6 +31,8 @@ module.exports = {
       interpreter: 'node',
       watch: false,
       autorestart: true,
+      max_restarts: 10,
+      min_uptime: '10s',
       restart_delay: 5000,
       max_memory_restart: '150M',
       env_production: {
@@ -53,6 +56,8 @@ module.exports = {
       interpreter: 'node',
       watch: false,
       autorestart: true,
+      max_restarts: 10,
+      min_uptime: '10s',
       restart_delay: 3000,
       max_memory_restart: '500M',
       env_production: {
@@ -90,6 +95,8 @@ module.exports = {
       interpreter: 'bash',
       watch: false,
       autorestart: true,
+      max_restarts: 10,
+      min_uptime: '10s',
       restart_delay: 5000,
       max_memory_restart: '2G',
       env_production: {
@@ -109,6 +116,8 @@ module.exports = {
       interpreter: 'bash',
       watch: false,
       autorestart: true,
+      max_restarts: 10,
+      min_uptime: '10s',
       restart_delay: 10000,
       max_memory_restart: '30M',
       log_file: '.laruche/logs/ollama-watchdog.log',
@@ -123,6 +132,8 @@ module.exports = {
       interpreter: 'python3',
       watch: false,
       autorestart: true,
+      max_restarts: 10,
+      min_uptime: '10s',
       restart_delay: 5000,
       max_memory_restart: '200M',
       log_file: 'agent/logs/ruche_bridge.log',
@@ -136,6 +147,9 @@ module.exports = {
       script: 'mcp_servers/mcp-compressor/index.js',
       watch: false,
       autorestart: true,
+      max_restarts: 10,
+      min_uptime: '10s',
+      restart_delay: 5000,
       max_memory_restart: '100M',
       log_file: '.laruche/logs/compressor.log',
       error_file: '.laruche/logs/compressor-error.log',
@@ -149,6 +163,8 @@ module.exports = {
       interpreter: 'node',
       watch: false,
       autorestart: true,
+      max_restarts: 10,
+      min_uptime: '10s',
       restart_delay: 5000,
       max_memory_restart: '100M',
       env_production: {
@@ -176,6 +192,8 @@ module.exports = {
       interpreter: 'node',
       watch: false,
       autorestart: true,
+      max_restarts: 10,
+      min_uptime: '10s',
       restart_delay: 5000,
       max_memory_restart: '80M',
       cron_restart: '0 4 * * *',
@@ -202,6 +220,8 @@ module.exports = {
       interpreter: 'node',
       watch: false,
       autorestart: true,
+      max_restarts: 10,
+      min_uptime: '10s',
       restart_delay: 5000,
       max_memory_restart: '120M',
       env_production: {
@@ -229,6 +249,8 @@ module.exports = {
       interpreter: 'node',
       watch: false,
       autorestart: true,
+      max_restarts: 10,
+      min_uptime: '10s',
       restart_delay: 5000,
       max_memory_restart: '200M',
       env_production: {
@@ -254,6 +276,8 @@ module.exports = {
       interpreter: 'node',
       watch: false,
       autorestart: true,
+      max_restarts: 10,
+      min_uptime: '10s',
       restart_delay: 10000,
       max_memory_restart: '150M',
       env_production: {
@@ -279,6 +303,8 @@ module.exports = {
       interpreter: 'node',
       watch: false,
       autorestart: true,
+      max_restarts: 10,
+      min_uptime: '10s',
       restart_delay: 5000,
       max_memory_restart: '150M',
       cron_restart: '0 8 * * *',           // redémarrage propre après le briefing
@@ -305,6 +331,8 @@ module.exports = {
       interpreter: 'node',
       watch: false,
       autorestart: true,
+      max_restarts: 10,
+      min_uptime: '10s',
       restart_delay: 5000,
       max_memory_restart: '100M',
       env_production: {
@@ -332,6 +360,8 @@ module.exports = {
       interpreter: 'node',
       watch: false,
       autorestart: true,
+      max_restarts: 10,
+      min_uptime: '10s',
       restart_delay: 5000,
       max_memory_restart: '100M',
       env_production: {
@@ -348,6 +378,33 @@ module.exports = {
       },
       log_file: '.laruche/logs/laruche-sync.log',
       error_file: '.laruche/logs/laruche-sync-error.log',
+      log_date_format: 'YYYY-MM-DD HH:mm:ss',
+      merge_logs: true,
+    },
+
+    // ── 15. Pico Satellite — agent PicoClaw Go léger :8090 ───────────────────
+    // Si le binaire satellite/picoclaw est absent, le processus démarre quand même
+    // mais isAvailable() retourne false → Jarvis continue sans lui.
+    {
+      name: 'pico-satellite',
+      script: 'src/pico-satellite-daemon.js',
+      interpreter: 'node',
+      watch: false,
+      autorestart: true,
+      max_restarts: 10,
+      min_uptime: '10s',
+      restart_delay: 10000,
+      max_memory_restart: '80M',
+      env_production: {
+        NODE_ENV: 'production',
+        PICOCLAW_PORT: '8090',
+      },
+      env_development: {
+        NODE_ENV: 'development',
+        PICOCLAW_PORT: '8090',
+      },
+      log_file: '.laruche/logs/pico-satellite.log',
+      error_file: '.laruche/logs/pico-satellite-error.log',
       log_date_format: 'YYYY-MM-DD HH:mm:ss',
       merge_logs: true,
     },

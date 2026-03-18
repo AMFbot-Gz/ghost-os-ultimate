@@ -1,0 +1,18 @@
+{
+  "name": "cli-anything-bridge",
+  "description": "Génère des skills CLI-Anything pour n'importe quelle app macOS — contrôle natif depuis Telegram",
+  "version": "1.0.0",
+  "category": "cli-anything",
+  "tier": "core",
+  "tags": ["cli-anything", "app-native", "bridge", "generate"],
+  "triggers": [
+    "rends agent-native",
+    "génère un cli pour",
+    "cli-anything",
+    "cli-anything status",
+    "quelles apps peuvent devenir des skills",
+    "génère les skills cli-anything",
+    "cli anything",
+    "installe un cli"
+  ]
+}

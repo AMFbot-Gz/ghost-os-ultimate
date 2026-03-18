@@ -1,142 +1,207 @@
-# 👻 Ghost OS Ultimate
+# Jarvis v2.0 — Agent IA autonome 100% local
 
-**Open Source Autonomous AI Agent Platform** — macOS · Python · Node.js
+```bash
+curl -fsSL https://raw.githubusercontent.com/wiaamhadara/ghost-os-ultimate/main/install.sh | bash
+```
 
-[![Deploy on Railway](https://railway.app/button.svg)](https://railway.app/template/ghost-os)
-
-> 16 Python layers + Node.js Queen + Claude Vision Computer Use + Auto-evolution
+**Agent personnel souverain.** Zero cloud. Zero abonnement. Votre Mac parle français et exécute 40+ skills.
 
 ---
 
-## Quick Start (30 seconds)
+## Comparatif
+
+| Fonctionnalité | Jarvis v2.0 | OpenJarvis | ChatGPT |
+|---|---|---|---|
+| 100% local | ✅ | ✅ | ❌ Cloud uniquement |
+| Contrôle macOS natif | ✅ | ⚠️ partiel | ❌ |
+| Telegram bot perso | ✅ | ❌ | ❌ |
+| 40+ skills intégrés | ✅ | ~15 | plugins payants |
+| Agent satellite léger | ✅ PicoClaw | ❌ | ❌ |
+| Multi-turn + mémoire | ✅ | ⚠️ | ✅ (cloud) |
+| Auto-repair PM2 | ✅ | ❌ | ❌ |
+| Prix | Gratuit | Gratuit | $20/mois |
+
+---
+
+## Installation
+
+### Prérequis
+
+- macOS 12+ (ARM64 ou Intel) / Ubuntu 20+ / Debian 11+
+- Node.js 18+
+- Python 3.11+ *(recommandé pour les agents Python)*
+- Ollama (pour LLM local) : [ollama.ai](https://ollama.ai)
+- Un bot Telegram : créez-le via [@BotFather](https://t.me/BotFather)
+
+### Installation en une commande
 
 ```bash
-git clone https://github.com/AMFbot-Gz/ghost-os-ultimate
-cd ghost-os-ultimate
-cp .env.example .env        # Add ANTHROPIC_API_KEY + TELEGRAM_BOT_TOKEN
-
-# One-click setup: LaunchAgent + PM2 + Cron + preflight
-bash scripts/setup_7day_autonomy.sh
-
-# Send a mission
-curl -X POST http://localhost:3000/api/mission \
-  -H "Content-Type: application/json" \
-  -d '{"command": "Organize my Desktop folder"}'
+curl -fsSL https://raw.githubusercontent.com/wiaamhadara/ghost-os-ultimate/main/install.sh | bash
 ```
+
+### Installation locale (depuis ce dépôt)
+
+```bash
+git clone https://github.com/wiaamhadara/ghost-os-ultimate.git
+cd ghost-os-ultimate
+bash install.sh
+```
+
+### Configuration
+
+```bash
+jarvis setup          # Wizard interactif (token Telegram, Ollama, API keys)
+jarvis start          # Démarre les 15 processus PM2
+jarvis status         # Vérifie tout
+```
+
+---
 
 ## Architecture
 
 ```
-Ghost OS Ultimate
-├── Queen Node.js :3000     ← REST API + 29 skills + Telegram + WebSocket HUD
-├── Python Layers
-│   ├── :8001 Queen.py      ← Vital loop + HITL
-│   ├── :8003 Brain.py      ← ReAct + ToT + Claude/Kimi/Ollama fallback
-│   ├── :8004 Executor.py   ← Shell sandbox + PyAutoGUI
-│   ├── :8005 Evolution.py  ← Auto-generates skills via Claude
-│   ├── :8006 Memory.py     ← ChromaDB semantic memory
-│   ├── :8014 Validator.py  ← Confidence scoring (gold/silver/bronze)
-│   └── :8015 ComputerUse  ← Claude Vision GUI automation (Retina-aware)
-└── Autonomous Weekly Cycle
-    ├── dream_cycle (1h)     → extract heuristics from episodes
-    ├── architect_cycle (Sun 3am) → fill skill gaps, update docs, git tag
-    └── self_healing (10s)   → circuit breaker per layer, auto-restart
+Telegram ──→ jarvis-gateway (Telegraf)
+                │
+                ├──→ orchestrator.js ──→ skills/ (40+ skills JS)
+                │         │
+                │         └──→ queen-node :3002 ──→ agents Python :8001-:8019
+                │
+                ├──→ world-model.js   ─── contexte PM2 + disk + Ollama (5min)
+                ├──→ proactive_watcher ── 5 règles (disk, PM2, emails, briefing)
+                └──→ pico-satellite   ─── PicoClaw Go :8090 (tâches légères)
+
+PM2 Processus (15) :
+  1. jarvis-gateway    Bot Telegram unique
+  2. queen-node        API REST :3002
+  3. agents-python     16 agents FastAPI :8001-:8019
+  4. ollama-watchdog   Surveillance Ollama
+  5. ruche-bridge      Bridge ruche-corps :8020
+  6. pico-compressor   MCP compression contexte
+  7. moltbot-bridge    Multi-canaux :3003
+  8. vital-loop        Health 24/7
+  9. goals-scheduler   Goals autonomes :3005
+ 10. memory-hub        Mémoire JSONL :3004
+ 11. self-repair       Auto-patch PM2 bus
+ 12. night-worker      Tâches nocturnes 02h-08h
+ 13. stitch-bridge     Workflows vente :3006
+ 14. laruche-sync      Sync LaRuche :3007
+ 15. pico-satellite    Agent Go léger :8090
 ```
 
-## Features
+---
 
-| Feature | Status |
-|---------|--------|
-| Computer Use (Claude Vision) | ✅ Zero-config, Retina-aware |
-| ReAct + Tree of Thoughts | ✅ Multi-step reasoning |
-| Self-healing layers | ✅ Circuit breaker + exponential backoff |
-| Auto-skill generation | ✅ Claude generates Node.js skills |
-| Semantic memory | ✅ ChromaDB + heuristics |
-| HITL via Telegram | ✅ Approval + 120s countdown |
-| Weekly autonomous cycle | ✅ Audit → gaps → generate → tag |
-| Docker production | ✅ `infra/docker/` |
-| Railway deploy | ✅ `railway.toml` |
-| SaaS auth (API keys) | ✅ `src/saas/` |
+## Exemples Telegram
 
-## Deploy
-
-### Local (recommended)
-```bash
-bash scripts/setup_7day_autonomy.sh
+```
+Toi → Jarvis
+─────────────────────────────────────────────────────────────────
+"prends un screenshot"          → screenshot Retina → photo Telegram
+"état du système"               → CPU, RAM, disque, Ollama, PM2
+"trie mes emails"               → skill email-triage → résumé
+"rapport ventes du jour"        → skill e-commerce → tableau ventes
+"ouvre Chrome et va sur Gmail"  → mac-control → screenshot confirmation
+"commit et push"                → git add -A && git commit && git push
+"cherche comment faire X"       → PicoClaw WebSearch → réponse
+"rappelle-moi demain à 9h de Y" → goals-scheduler → notification
 ```
 
-### Docker
+---
+
+## CLI jarvis
+
 ```bash
-cp .env.example .env
-docker-compose -f infra/docker/docker-compose.prod.yml up -d
+jarvis start          # Démarre Jarvis (15 processus PM2)
+jarvis stop           # Arrête tout
+jarvis restart        # Redémarre tout
+jarvis status         # État PM2 + satellite + queen + Ollama
+jarvis update         # git pull + npm install + restart
+jarvis logs [nom]     # Logs en temps réel (défaut: jarvis-gateway)
+jarvis skills         # Liste les 40+ skills
+jarvis setup          # Wizard de configuration .env
+jarvis uninstall      # Supprime le symlink
 ```
 
-### Railway (cloud API, no Computer Use)
-[![Deploy on Railway](https://railway.app/button.svg)](https://railway.app/template/ghost-os)
+---
 
-### Vercel (dashboard only)
-[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https://github.com/AMFbot-Gz/ghost-os-ultimate&root=interfaces/dashboard)
+## Skills disponibles (40+)
 
-## Environment Variables
+| Catégorie | Skills |
+|---|---|
+| **Computer Use** | take_screenshot, smart_click, type_text, find_element, screen_elements, mouse_control, press_key, accessibility_reader, wait_for_element |
+| **Browser** | open_app, goto_url, open_google |
+| **Système** | read_file, run_shell, run_command, list_big_files, summarize_project, http_fetch, system_info, clipboard |
+| **Organisation** | organise_screenshots, organise_telechargements |
+| **Communication** | telegram_notify |
+| **Intégration** | agent_bridge, invoke_claude_code, update_world_state |
+| **DevOps** | docker_control, ollama_control, tailscale_control |
+| **Satellite** | cli_anything_bridge |
+
+### Créer un skill
 
 ```bash
-# Required
-ANTHROPIC_API_KEY=sk-ant-...      # Claude API
-TELEGRAM_BOT_TOKEN=...            # @BotFather
-ADMIN_TELEGRAM_ID=...             # @userinfobot
+mkdir skills/mon_skill
+# skill.js : export async function run(params) { ... }
+# manifest.json : { "name", "description", "triggers": [...] }
+# → Rechargement automatique au prochain démarrage
+```
 
-# Optional
+---
+
+## Variables .env
+
+```bash
+# Obligatoires
+TELEGRAM_BOT_TOKEN=123456789:ABCdef...    # @BotFather
+ADMIN_TELEGRAM_ID=123456789               # @userinfobot
+CHIMERA_SECRET=votre_secret_hmac
+
+# Recommandées
 OLLAMA_HOST=http://localhost:11434
-GHOST_OS_MODE=ultimate            # ultimate | lite | cloud
-CHIMERA_SECRET=...                # API auth secret
+OLLAMA_MODEL=llama3.2:3b
+GHOST_OS_MODE=ultimate
+
+# Optionnelles
+ANTHROPIC_API_KEY=sk-ant-...              # Fallback cloud
+PICOCLAW_PORT=8090                        # Satellite Go
 ```
 
-## API
+---
+
+## PicoClaw Satellite
+
+Agent Go léger qui traite les requêtes simples sans charger Ollama principal :
 
 ```bash
-# Mission
-POST /api/mission    {"command": "your task"}
+# Installation automatique via install.sh
+# Ou manuellement :
+curl -fsSL https://github.com/sipeed/picoclaw/releases/download/v0.2.3/picoclaw_Darwin_arm64.tar.gz \
+  | tar -xz -C satellite/
 
-# Status
-GET  /api/health
-GET  /api/agents
-GET  /api/skills
-
-# Computer Use
-POST /api/v1/cu/session   {"goal": "...", "max_steps": 10}
-GET  /api/v1/cu/session/:id
-
-# API Keys (SaaS)
-POST /api/v1/keys
-GET  /api/v1/usage
+# Test
+curl http://localhost:8090/health
 ```
 
-## Tests
+---
+
+## Développement
 
 ```bash
-npm test                  # 289 Jest tests
-npm run test:python       # 990 Pytest tests
-python3 scripts/architect_weekly_cycle.py --dry-run  # Full audit
+# Mode dev (watch + logs verbose)
+NODE_ENV=development pm2 start ecosystem.config.cjs --env development
+
+# Tests
+npm test
+
+# Linter
+npm run lint
+
+# Ajouter un modèle Ollama
+ollama pull llama3.2:3b
+ollama pull moondream      # vision
 ```
 
-## Roadmap
+---
 
-- [x] Computer Use Vision (zero-config)
-- [x] Self-healing daemon (circuit breaker)
-- [x] Weekly autonomous architect cycle
-- [x] SaaS auth layer (API keys)
-- [x] Railway + Docker + Vercel deploy configs
-- [ ] Cloud-hosted version (no local GPU needed)
-- [ ] Multi-tenant isolation
-- [ ] Stripe billing integration
-- [ ] Public skill marketplace
+## Licence
 
-## Sister Repos (Historical)
-
-- **[PICO-RUCHE](https://github.com/AMFbot-Gz/PICO-RUCHE)** — Ghost OS v5.0 (archived, predecessor)
-- **[LaRuche](https://github.com/AMFbot-Gz/LaRuche)** — Chimera OS prototype (archived)
-- **[AMFbot-Suite](https://github.com/AMFbot-Gz/AMFbot-Suite)** — Legacy JARVIS v2.6 (archived)
-
-## License
-
-MIT — Free to use, modify, deploy.
+MIT — Wiaam Hadara, 2026

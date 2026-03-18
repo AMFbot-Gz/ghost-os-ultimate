@@ -1,0 +1,9 @@
+{
+  "name": "clipboard",
+  "description": "Lit et écrit dans le presse-papiers macOS (pbcopy/pbpaste)",
+  "version": "1.0.0",
+  "category": "system",
+  "tier": "core",
+  "tags": ["clipboard", "copier", "coller", "presse-papiers"],
+  "triggers": ["presse-papiers", "clipboard", "copie dans", "lis le presse-papiers", "colle", "copier dans le presse-papiers"]
+}

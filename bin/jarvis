@@ -1,0 +1,205 @@
+#!/usr/bin/env bash
+# bin/jarvis — CLI de gestion Jarvis v2.0
+#
+# Commandes :
+#   jarvis start      — Démarre tous les processus PM2
+#   jarvis stop       — Arrête tous les processus
+#   jarvis restart    — Redémarre tous les processus
+#   jarvis status     — Affiche l'état PM2 + satellites
+#   jarvis update     — git pull + npm install + restart
+#   jarvis logs [n]   — Affiche les logs (default: jarvis-gateway)
+#   jarvis skills     — Liste les skills disponibles
+#   jarvis setup      — Lance le wizard de configuration
+#   jarvis uninstall  — Supprime le symlink /usr/local/bin/jarvis
+
+set -euo pipefail
+
+# ── Résolution du répertoire racine ──────────────────────────────────────────
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+ECOSYSTEM="$ROOT/ecosystem.config.cjs"
+
+# ── Couleurs ─────────────────────────────────────────────────────────────────
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+CYAN='\033[0;36m'
+BOLD='\033[1m'
+RESET='\033[0m'
+
+ok()   { echo -e "${GREEN}✅ $*${RESET}"; }
+err()  { echo -e "${RED}❌ $*${RESET}" >&2; }
+info() { echo -e "${CYAN}ℹ  $*${RESET}"; }
+warn() { echo -e "${YELLOW}⚠  $*${RESET}"; }
+sep()  { echo -e "${BOLD}────────────────────────────────────────────────────${RESET}"; }
+
+# ── Vérification PM2 ─────────────────────────────────────────────────────────
+require_pm2() {
+  if ! command -v pm2 &>/dev/null; then
+    err "PM2 non trouvé — installez-le : npm install -g pm2"
+    exit 1
+  fi
+}
+
+# ── Commandes ─────────────────────────────────────────────────────────────────
+
+cmd_start() {
+  require_pm2
+  info "Démarrage de Jarvis..."
+  cd "$ROOT"
+  if pm2 list 2>/dev/null | grep -q "jarvis-gateway.*online"; then
+    warn "Jarvis est déjà en cours d'exécution."
+    warn "Utilisez 'jarvis restart' pour relancer."
+    exit 0
+  fi
+  pm2 start "$ECOSYSTEM" --env production
+  pm2 save
+  ok "Jarvis démarré."
+  cmd_status
+}
+
+cmd_stop() {
+  require_pm2
+  info "Arrêt de Jarvis..."
+  pm2 stop "$ECOSYSTEM" 2>/dev/null || pm2 stop all
+  ok "Jarvis arrêté."
+}
+
+cmd_restart() {
+  require_pm2
+  info "Redémarrage de Jarvis..."
+  cd "$ROOT"
+  pm2 restart "$ECOSYSTEM" --env production
+  ok "Jarvis redémarré."
+  cmd_status
+}
+
+cmd_status() {
+  require_pm2
+  sep
+  echo -e "${BOLD}  Jarvis v2.0 — État des processus${RESET}"
+  sep
+  pm2 list
+  sep
+
+  # Compter les processus online
+  ONLINE=$(pm2 jlist 2>/dev/null | node -e \
+    "const d=JSON.parse(require('fs').readFileSync('/dev/stdin','utf8')); \
+     console.log(d.filter(p=>p.pm2_env.status==='online').length);" 2>/dev/null || echo "?")
+  echo -e "  Processus online : ${BOLD}${ONLINE}${RESET}"
+
+  # PicoClaw satellite
+  if curl -sf http://localhost:"${PICOCLAW_PORT:-8090}"/health &>/dev/null; then
+    echo -e "  Pico-Satellite   : ${GREEN}online :${PICOCLAW_PORT:-8090}${RESET}"
+  else
+    echo -e "  Pico-Satellite   : ${YELLOW}offline${RESET}"
+  fi
+
+  # Queen Node
+  if curl -sf http://localhost:3002/api/health &>/dev/null; then
+    echo -e "  Queen Node       : ${GREEN}online :3002${RESET}"
+  else
+    echo -e "  Queen Node       : ${YELLOW}offline${RESET}"
+  fi
+
+  # Ollama
+  OLLAMA_MODELS=$(curl -sf http://localhost:11434/api/tags 2>/dev/null \
+    | node -e "const d=JSON.parse(require('fs').readFileSync('/dev/stdin','utf8')); \
+               console.log(d.models?.length||0);" 2>/dev/null || echo "?")
+  echo -e "  Ollama modèles   : ${BOLD}${OLLAMA_MODELS}${RESET}"
+  sep
+}
+
+cmd_update() {
+  require_pm2
+  info "Mise à jour Jarvis..."
+  cd "$ROOT"
+  git pull --ff-only || { warn "git pull échoué — vérifiez votre connexion/branches"; }
+  npm install --silent
+  pm2 restart "$ECOSYSTEM" --env production
+  pm2 save
+  ok "Jarvis mis à jour et redémarré."
+}
+
+cmd_logs() {
+  require_pm2
+  local target="${2:-jarvis-gateway}"
+  local lines="${3:-50}"
+  info "Logs de $target (${lines} dernières lignes) — Ctrl+C pour quitter"
+  pm2 logs "$target" --lines "$lines"
+}
+
+cmd_skills() {
+  info "Skills disponibles :"
+  cd "$ROOT"
+  node --input-type=module <<'EOF'
+import registry from './src/skill-registry.js';
+await registry.autoload('./skills');
+const skills = registry.list();
+console.log(`\nTotal : ${skills.length} skills\n`);
+const byCategory = {};
+for (const s of skills) {
+  const cat = s.manifest?.category || 'other';
+  byCategory[cat] = byCategory[cat] || [];
+  byCategory[cat].push(s.name);
+}
+for (const [cat, names] of Object.entries(byCategory).sort()) {
+  console.log(`  ${cat.padEnd(20)} ${names.join(', ')}`);
+}
+EOF
+}
+
+cmd_setup() {
+  cd "$ROOT"
+  node src/setup-wizard.js
+}
+
+cmd_uninstall() {
+  warn "Suppression du symlink /usr/local/bin/jarvis..."
+  if [ -L /usr/local/bin/jarvis ]; then
+    sudo rm /usr/local/bin/jarvis
+    ok "Symlink supprimé."
+  else
+    info "Aucun symlink /usr/local/bin/jarvis trouvé."
+  fi
+  warn "Pour supprimer complètement Jarvis, supprimez le dossier : $ROOT"
+}
+
+cmd_help() {
+  echo ""
+  echo -e "${BOLD}  Jarvis v2.0 — CLI de gestion${RESET}"
+  echo ""
+  echo -e "  ${CYAN}jarvis start${RESET}          Démarre tous les processus PM2"
+  echo -e "  ${CYAN}jarvis stop${RESET}           Arrête tous les processus"
+  echo -e "  ${CYAN}jarvis restart${RESET}        Redémarre tous les processus"
+  echo -e "  ${CYAN}jarvis status${RESET}         État PM2, satellite, queen, Ollama"
+  echo -e "  ${CYAN}jarvis update${RESET}         git pull + npm install + restart"
+  echo -e "  ${CYAN}jarvis logs [nom] [n]${RESET} Logs d'un processus (défaut: gateway)"
+  echo -e "  ${CYAN}jarvis skills${RESET}         Liste les ${BOLD}40+${RESET} skills"
+  echo -e "  ${CYAN}jarvis setup${RESET}          Wizard interactif .env"
+  echo -e "  ${CYAN}jarvis uninstall${RESET}      Supprime le symlink"
+  echo ""
+}
+
+# ── Dispatch ──────────────────────────────────────────────────────────────────
+
+CMD="${1:-help}"
+shift 2>/dev/null || true
+
+case "$CMD" in
+  start)     cmd_start "$@" ;;
+  stop)      cmd_stop "$@" ;;
+  restart)   cmd_restart "$@" ;;
+  status)    cmd_status "$@" ;;
+  update)    cmd_update "$@" ;;
+  logs)      cmd_logs "" "$@" ;;
+  skills)    cmd_skills "$@" ;;
+  setup)     cmd_setup "$@" ;;
+  uninstall) cmd_uninstall "$@" ;;
+  help|--help|-h) cmd_help ;;
+  *)
+    err "Commande inconnue : $CMD"
+    cmd_help
+    exit 1
+    ;;
+esac
