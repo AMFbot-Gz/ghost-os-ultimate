@@ -9,7 +9,7 @@ import dotenv from 'dotenv';
 import { createRequire } from 'module';
 import { resolve, dirname } from 'path';
 import { fileURLToPath } from 'url';
-import { readFileSync } from 'fs';
+import { readFileSync, writeFileSync, existsSync } from 'fs';
 
 dotenv.config();
 
@@ -26,6 +26,58 @@ if (!TOKEN) {
 }
 
 const bot = new Telegraf(TOKEN);
+
+// ─── Learning Engine ────────────────────────────────────────────────────────
+
+const FAST_PATHS_FILE = resolve(__dirname, '../data/fast-paths.json');
+
+function loadFastPaths() {
+  try {
+    if (!existsSync(FAST_PATHS_FILE)) return {};
+    return JSON.parse(readFileSync(FAST_PATHS_FILE, 'utf8'));
+  } catch { return {}; }
+}
+
+function saveFastPaths(fp) {
+  try { writeFileSync(FAST_PATHS_FILE, JSON.stringify(fp, null, 2)); } catch {}
+}
+
+// Normalise une commande en clé de fast-path
+function normalizeCmd(cmd) {
+  return cmd.toLowerCase().replace(/[^a-z0-9 ]/g, '').trim().substring(0, 80);
+}
+
+// Apprend d'une mission réussie
+async function learnFromMission(command, intentAgent, skillName, result, durationMs) {
+  // 1. Stocker dans memory-hub :3004 (non-bloquant)
+  fetch('http://localhost:3004/memory/store', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      text: command,
+      result: (result?.result || '').substring(0, 200),
+      source: 'telegram',
+      tags: [intentAgent || 'brain', skillName || 'unknown'],
+      duration: durationMs,
+      success: result?.success !== false,
+    }),
+  }).catch(() => {});
+
+  // 2. Si succès ET rapide → fast-path
+  if (result?.success !== false && durationMs < 10000 && skillName) {
+    const fp = loadFastPaths();
+    const key = normalizeCmd(command);
+    if (key.length > 5) {
+      fp[key] = {
+        skill: skillName,
+        agent: intentAgent || 'brain',
+        hits: (fp[key]?.hits || 0) + 1,
+        lastSeen: new Date().toISOString(),
+      };
+      saveFastPaths(fp);
+    }
+  }
+}
 
 // ─── Intent Engine ────────────────────────────────────────────────────────────
 // Analyse le texte naturel et mappe vers skill ou agent
@@ -49,6 +101,14 @@ function detectIntent(text) {
     if (pattern.test(text)) return { intent, risk };
   }
   return { intent: 'mission', risk: false }; // fallback → mission générale
+}
+
+// Charger les fast-paths appris et les injecter dans l'intent engine
+const _learnedFastPaths = loadFastPaths();
+const _highConfidencePaths = Object.entries(_learnedFastPaths)
+  .filter(([, v]) => v.hits >= 3);
+if (_highConfidencePaths.length > 0) {
+  console.log(`[Gateway] ${_highConfidencePaths.length} fast-paths chargés depuis l'historique`);
 }
 
 // ─── HITL 120s ────────────────────────────────────────────────────────────────
@@ -158,7 +218,7 @@ bot.on('text', async (ctx) => {
       const typing = ctx.sendChatAction('typing');
       try {
         const result = await callQueenMission(text);
-        await sendMissionReport(ctx, text, result);
+        await sendMissionReport(ctx, text, result, null, intent);
       } catch (e) {
         ctx.reply(`❌ Erreur mission : ${e.message}`);
       }
@@ -170,14 +230,14 @@ bot.on('text', async (ctx) => {
   const t0 = Date.now();
   try {
     const result = await callQueenMission(text);
-    await sendMissionReport(ctx, text, result, Date.now() - t0);
+    await sendMissionReport(ctx, text, result, Date.now() - t0, intent);
   } catch (e) {
     await ctx.reply(`❌ Erreur : ${e.message}`);
   }
 });
 
 // ─── Rapport de mission structuré ─────────────────────────────────────────────
-async function sendMissionReport(ctx, command, result, duration_ms) {
+async function sendMissionReport(ctx, command, result, duration_ms, intentObj) {
   const status = result?.status === 'completed' ? '✅' : result?.status === 'failed' ? '❌' : '⏳';
   const dur = duration_ms ? ` (${(duration_ms/1000).toFixed(1)}s)` : '';
   const output = result?.output || result?.result || result?.summary || JSON.stringify(result).slice(0, 300);
@@ -186,16 +246,14 @@ async function sendMissionReport(ctx, command, result, duration_ms) {
     { parse_mode: 'Markdown' }
   );
 
-  // Store en mémoire (non-bloquant)
-  fetch('http://localhost:3004/memory/store', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      text: `${command} → ${output.slice(0, 200)}`,
-      source: 'telegram',
-      tags: [result?.status || 'unknown'],
-    }),
-  }).catch(() => {});
+  // Learning non-bloquant (stockage mémoire + fast-path si succès rapide)
+  learnFromMission(
+    command,
+    intentObj?.intent || null,   // l'intent détecté (ex: 'mission', 'take_screenshot')
+    null,                         // skill name non connu à ce niveau
+    result,
+    duration_ms
+  ).catch(() => {});
 }
 
 // ─── Démarrage ────────────────────────────────────────────────────────────────

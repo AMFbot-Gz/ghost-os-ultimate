@@ -1,0 +1,10 @@
+{
+  "name": "picoclaw-satellite",
+  "description": "Satellite léger Go — délègue missions simples hors Ollama principal",
+  "version": "1.0.0",
+  "tier": "community",
+  "category": "integration",
+  "created": "2026-03-18T00:00:00.000Z",
+  "tags": ["satellite", "léger", "rapide", "picoclaw", "go"],
+  "triggers": ["satellite", "léger", "rapide", "simple", "surveille"]
+}

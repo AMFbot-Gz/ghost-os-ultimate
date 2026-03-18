@@ -13,6 +13,8 @@
  *   8. vital-loop        — Boucle vitale 24/7 (health + alertes Telegram)
  *   9. goals-scheduler   — Scheduler goals autonomes (:3005)
  *  10. memory-hub        — Hub mémoire unifié (:3004)
+ *  11. self-repair       — Auto-repair engine (PM2 bus + brain patches)
+ *  12. night-worker      — Worker nocturne (02h-07h30 cron tasks)
  *
  * RÈGLE : UN SEUL processus écoute Telegram = jarvis-gateway
  */
@@ -239,6 +241,57 @@ module.exports = {
       },
       log_file: '.laruche/logs/memory-hub.log',
       error_file: '.laruche/logs/memory-hub-error.log',
+      log_date_format: 'YYYY-MM-DD HH:mm:ss',
+      merge_logs: true,
+    },
+
+    // ── 11. Self-Repair Engine — auto-patch via PM2 bus + brain :8003 ─────────
+    {
+      name: 'self-repair',
+      script: 'src/self-repair.js',
+      interpreter: 'node',
+      watch: false,
+      autorestart: true,
+      restart_delay: 10000,
+      max_memory_restart: '150M',
+      env_production: {
+        NODE_ENV: 'production',
+        TELEGRAM_MODE: 'gateway',
+        BRAIN_URL: 'http://localhost:8003',
+      },
+      env_development: {
+        NODE_ENV: 'development',
+        TELEGRAM_MODE: 'gateway',
+        BRAIN_URL: 'http://localhost:8003',
+      },
+      log_file: '.laruche/logs/self-repair.log',
+      error_file: '.laruche/logs/self-repair-error.log',
+      log_date_format: 'YYYY-MM-DD HH:mm:ss',
+      merge_logs: true,
+    },
+
+    // ── 12. Night Worker — tâches cron nocturnes (02h00-07h30) ───────────────
+    {
+      name: 'night-worker',
+      script: 'src/night-worker.js',
+      interpreter: 'node',
+      watch: false,
+      autorestart: true,
+      restart_delay: 5000,
+      max_memory_restart: '150M',
+      cron_restart: '0 8 * * *',           // redémarrage propre après le briefing
+      env_production: {
+        NODE_ENV: 'production',
+        TELEGRAM_MODE: 'gateway',
+        BRAIN_URL: 'http://localhost:8003',
+      },
+      env_development: {
+        NODE_ENV: 'development',
+        TELEGRAM_MODE: 'gateway',
+        BRAIN_URL: 'http://localhost:8003',
+      },
+      log_file: '.laruche/logs/night-worker.log',
+      error_file: '.laruche/logs/night-worker-error.log',
       log_date_format: 'YYYY-MM-DD HH:mm:ss',
       merge_logs: true,
     },

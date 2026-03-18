@@ -1,0 +1,8 @@
+{
+  "name": "self-repair",
+  "description": "Analyse et répare automatiquement les erreurs des services PM2",
+  "version": "1.0.0",
+  "tier": "core",
+  "category": "system",
+  "triggers": ["répare", "repair", "fixe", "corrige", "erreur service"]
+}
