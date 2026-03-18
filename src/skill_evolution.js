@@ -100,7 +100,7 @@ Exporte: export async function run(params = {}) { return { success: true, result
 ES Module uniquement. Code fonctionnel. Pas d'explications.`;
   const generatedCode = await ollamaAnalyze(codePrompt);
 
-  // ── ABW manifest.yaml ──────────────────────────────────────────────────────
+  // ── manifest.json (skill_runner attend manifest.json, pas yaml) ────────────
   const manifestObj = {
     identity: { id: skillName, version: "1.0.0", tier, created: new Date().toISOString() },
     capabilities: {
@@ -127,7 +127,18 @@ ES Module uniquement. Code fonctionnel. Pas d'explications.`;
       filesystem: ["read", "write_tmp"],
     },
   };
-  writeFileSync(join(skillDir, "manifest.yaml"), yaml.dump(manifestObj, { indent: 2 }));
+  // Format plat pour compatibilité skill_runner.js (lit manifest.json uniquement)
+  const manifestJson = {
+    name: skillName,
+    description,
+    version: "1.0.0",
+    tier,
+    created: manifestObj.identity.created,
+    category: "auto-generated",
+    capabilities: manifestObj.capabilities,
+    permissions: manifestObj.permissions,
+  };
+  writeFileSync(join(skillDir, "manifest.json"), JSON.stringify(manifestJson, null, 2));
 
   // ── SKILL.md avec pipeline CASCU ──────────────────────────────────────────
   const skillMd = `---

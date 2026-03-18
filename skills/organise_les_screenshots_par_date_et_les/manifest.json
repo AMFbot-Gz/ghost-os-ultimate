@@ -1,0 +1,9 @@
+{
+  "name": "organise_les_screenshots_par_date_et_les",
+  "description": "Organise les screenshots par date et les compresse",
+  "version": "1.0.0",
+  "tier": "community",
+  "category": "filesystem",
+  "created": "2026-03-13T03:03:06.022Z",
+  "tags": ["screenshots", "organisation", "compression", "filesystem"]
+}

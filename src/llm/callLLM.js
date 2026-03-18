@@ -46,7 +46,8 @@ function isTransientError(err) {
   // Timeouts et erreurs génériques → transitoires
   if (err.message?.toLowerCase().includes('timeout'))  return true;
   if (err.message?.toLowerCase().includes('overload'))  return true;
-  if (err.name === 'AbortError')                        return true;
+  // AbortError = timeout fetch délibéré → FATAL, pas de retry (sinon 3× le timeout)
+  if (err.name === 'AbortError')                        return false;
   // Par défaut : considère comme transitoire (comportement conservateur)
   return true;
 }

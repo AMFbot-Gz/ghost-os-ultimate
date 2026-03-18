@@ -34,8 +34,9 @@
   },
   "agent_market": {
     "credits": {
-      "test_integration_agent_1773386727039": 490
+      "test_integration_agent_1773386727039": 490,
+      "queen": 990
     },
-    "last_updated": "2026-03-13T07:25:27.042Z"
+    "last_updated": "2026-03-18T01:25:51.158Z"
   }
 }

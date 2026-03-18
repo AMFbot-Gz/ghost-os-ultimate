@@ -1,0 +1,9 @@
+{
+  "name": "organise_telechargements",
+  "description": "Organise ~/Downloads par type de fichier (images, docs, vidéos, archives)",
+  "version": "1.0.0",
+  "tier": "community",
+  "category": "filesystem",
+  "created": "2026-03-13T03:01:30.565Z",
+  "tags": ["downloads", "organisation", "filesystem", "type"]
+}

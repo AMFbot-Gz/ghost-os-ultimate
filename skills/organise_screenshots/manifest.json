@@ -1,0 +1,9 @@
+{
+  "name": "organise_screenshots",
+  "description": "Organise les screenshots par date dans ~/Pictures/Screenshots",
+  "version": "1.0.0",
+  "tier": "system",
+  "category": "filesystem",
+  "created": "2026-03-13T03:03:06.016Z",
+  "tags": ["screenshots", "organisation", "filesystem", "date"]
+}

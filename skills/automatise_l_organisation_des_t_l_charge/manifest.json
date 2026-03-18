@@ -1,0 +1,9 @@
+{
+  "name": "automatise_l_organisation_des_t_l_charge",
+  "description": "Automatise l'organisation des téléchargements par type de fichier et date",
+  "version": "1.0.0",
+  "tier": "community",
+  "category": "filesystem",
+  "created": "2026-03-13T03:01:30.591Z",
+  "tags": ["downloads", "organisation", "filesystem", "automation"]
+}
