@@ -185,6 +185,17 @@ async function sendMissionReport(ctx, command, result, duration_ms) {
     `${status} *Mission${dur}*\n\`${command.slice(0, 80)}\`\n\n${output}`,
     { parse_mode: 'Markdown' }
   );
+
+  // Store en mémoire (non-bloquant)
+  fetch('http://localhost:3004/memory/store', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      text: `${command} → ${output.slice(0, 200)}`,
+      source: 'telegram',
+      tags: [result?.status || 'unknown'],
+    }),
+  }).catch(() => {});
 }
 
 // ─── Démarrage ────────────────────────────────────────────────────────────────

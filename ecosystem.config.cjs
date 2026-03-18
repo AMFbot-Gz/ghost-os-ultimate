@@ -1,6 +1,6 @@
 /**
- * ecosystem.config.js — Jarvis OS Unified PM2 Config
- * Démarrage : pm2 start ecosystem.config.js --env production
+ * ecosystem.config.cjs — Jarvis OS Unified PM2 Config (CJS)
+ * Démarrage : pm2 start ecosystem.config.cjs --env production
  *
  * Processus :
  *   1. jarvis-gateway    — Bot Telegram UNIQUE (:gateway)
@@ -15,10 +15,9 @@
  *  10. memory-hub        — Hub mémoire unifié (:3004)
  *
  * RÈGLE : UN SEUL processus écoute Telegram = jarvis-gateway
- * queen-node utilise TELEGRAM_MODE=gateway (Telegraf désactivé)
  */
 
-export default {
+module.exports = {
   apps: [
     // ── 1. Jarvis Gateway — Bot Telegram UNIQUE ─────────────────────────────
     {
@@ -57,7 +56,7 @@ export default {
         STANDALONE_MODE: 'true',
         API_PORT: '3002',
         HUD_PORT: '9003',
-        TELEGRAM_MODE: 'gateway',    // ← Telegraf désactivé — gateway gère Telegram
+        TELEGRAM_MODE: 'gateway',
         GHOST_OS_MODE: 'ultimate',
         LLM_TIMEOUT_MS: '30000',
         LLM_GLOBAL_TIMEOUT_MS: '45000',
@@ -91,7 +90,7 @@ export default {
       max_memory_restart: '2G',
       env_production: {
         PYTHONUNBUFFERED: '1',
-        TELEGRAM_MODE: 'gateway',    // ← queen.py polling désactivé
+        TELEGRAM_MODE: 'gateway',
       },
       log_file: 'agent/logs/agents-startup.log',
       error_file: 'agent/logs/agents-startup-error.log',
@@ -124,6 +123,7 @@ export default {
       max_memory_restart: '200M',
       log_file: 'agent/logs/ruche_bridge.log',
       error_file: 'agent/logs/ruche_bridge-error.log',
+      log_date_format: 'YYYY-MM-DD HH:mm:ss',
     },
 
     // ── 6. MCP Compressor ───────────────────────────────────────────────────
@@ -135,6 +135,7 @@ export default {
       max_memory_restart: '100M',
       log_file: '.laruche/logs/compressor.log',
       error_file: '.laruche/logs/compressor-error.log',
+      log_date_format: 'YYYY-MM-DD HH:mm:ss',
     },
 
     // ── 7. Moltbot Bridge — passerelle multi-canaux :3003 ───────────────────
@@ -173,7 +174,7 @@ export default {
       autorestart: true,
       restart_delay: 5000,
       max_memory_restart: '80M',
-      cron_restart: '0 4 * * *',          // redémarrage propre à 04h00
+      cron_restart: '0 4 * * *',
       env_production: {
         NODE_ENV: 'production',
         TELEGRAM_MODE: 'gateway',

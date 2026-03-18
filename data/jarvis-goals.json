@@ -1,0 +1,61 @@
+{
+  "version": "1.0.0",
+  "lastUpdated": "2026-03-18T02:30:00.543Z",
+  "goals": [
+    {
+      "id": "daily-email-triage",
+      "name": "Triage email quotidien",
+      "cron": "0 8 * * *",
+      "command": "trie mes emails des dernières 24h et envoie-moi un résumé",
+      "skill": "email-triage",
+      "active": true,
+      "notify": true,
+      "lastRun": null,
+      "runCount": 0
+    },
+    {
+      "id": "weekly-shopify-report",
+      "name": "Rapport Shopify hebdo",
+      "cron": "0 9 * * 1",
+      "command": "génère le rapport des ventes de la semaine et envoie-le moi",
+      "skill": "shopify-backend",
+      "active": false,
+      "notify": true,
+      "lastRun": null,
+      "runCount": 0
+    },
+    {
+      "id": "self-health-check",
+      "name": "Auto-diagnostic système",
+      "cron": "*/30 * * * *",
+      "command": "vérifie l'état de tous les services et répare si nécessaire",
+      "skill": "ruche-corps-bridge",
+      "active": true,
+      "notify": false,
+      "lastRun": "2026-03-18T02:30:00.505Z",
+      "runCount": 1
+    },
+    {
+      "id": "memory-cleanup",
+      "name": "Nettoyage mémoire",
+      "cron": "0 3 * * *",
+      "command": "archive les épisodes de mémoire de plus de 30 jours",
+      "skill": null,
+      "active": true,
+      "notify": false,
+      "lastRun": null,
+      "runCount": 0
+    },
+    {
+      "id": "daily-system-report",
+      "name": "Rapport système quotidien",
+      "cron": "0 9 * * *",
+      "command": "donne moi l'état complet du système jarvis avec uptime et métriques",
+      "skill": null,
+      "active": true,
+      "notify": true,
+      "lastRun": null,
+      "runCount": 0
+    }
+  ]
+}
