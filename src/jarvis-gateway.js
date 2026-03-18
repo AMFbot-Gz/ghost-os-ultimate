@@ -14,6 +14,10 @@ import {
   takeScreenshot, openApp, goToUrl, typeText, smartClick,
   extractAppName, extractUrl, decomposeCommand, executeSteps, runCUSession,
 } from './mac-control.js';
+import { execute as orchestrate }      from './orchestrator.js';
+import { needsClarification }          from './metiers.js';
+import { startAutoRefresh, touchLastSeen, recordError } from './world-model.js';
+import { startSystemWatcher, touchInteraction }         from './proactive_watcher.js';
 
 dotenv.config();
 
@@ -30,6 +34,53 @@ if (!TOKEN) {
 }
 
 const bot = new Telegraf(TOKEN);
+
+// ─── Historique conversationnel (20 échanges par session) ────────────────────
+
+const MAX_HISTORY = 20;
+// Map<chatId, { history: [{role, content}], pendingClarification: string|null }>
+const _sessions = new Map();
+
+function getSession(chatId) {
+  if (!_sessions.has(chatId)) {
+    _sessions.set(chatId, { history: [], pendingClarification: null });
+  }
+  return _sessions.get(chatId);
+}
+
+function pushHistory(chatId, role, content) {
+  const sess = getSession(chatId);
+  sess.history.push({ role, content: content.slice(0, 400) });
+  if (sess.history.length > MAX_HISTORY * 2) {
+    sess.history = sess.history.slice(-MAX_HISTORY * 2);
+  }
+}
+
+/**
+ * Résout une suite de contexte : si l'utilisateur dit "ventes" après qu'on
+ * lui a demandé "rapport sur quoi — ventes, système, ou emails ?",
+ * reconstruit la commande complète.
+ */
+function resolveContext(chatId, newText) {
+  const sess = getSession(chatId);
+  if (!sess.pendingClarification) return newText;
+
+  // L'utilisateur répondait à une clarification
+  const original = sess.pendingClarification;
+  sess.pendingClarification = null;
+
+  // Construire la commande complète à partir de la réponse courte
+  const short = newText.trim().toLowerCase();
+  if (/^ventes?/.test(short))   return `${original} ventes`;
+  if (/^syst/.test(short))      return `${original} système`;
+  if (/^email/.test(short))     return `${original} emails`;
+  if (/^screenshot|^photo/.test(short)) return `prends un screenshot`;
+  if (/^logs?/.test(short))     return `${original} logs`;
+  if (/^audit/.test(short))     return `audit complet de mon système`;
+
+  // Réponse non reconnue → on concatene simplement
+  return `${original} ${newText}`;
+}
 
 // ─── Learning Engine ────────────────────────────────────────────────────────
 
@@ -193,7 +244,19 @@ bot.on('text', async (ctx) => {
     return ctx.reply('❌ Non autorisé');
   }
 
-  const text = ctx.message.text;
+  const chatId = ctx.chat.id;
+  const rawText = ctx.message.text;
+
+  // Mise à jour world model + tracker idle
+  touchLastSeen();
+  touchInteraction();
+
+  // Résolution contexte multi-tour (suite / clarification)
+  const text = resolveContext(chatId, rawText);
+
+  // Enregistrer dans l'historique
+  pushHistory(chatId, 'user', text);
+
   const { intent, risk, direct } = detectIntent(text);
 
   // Commandes internes
@@ -247,16 +310,46 @@ bot.on('text', async (ctx) => {
     return;
   }
 
-  // Mission normale → Queen
+  // Vérification clarification nécessaire
+  const clarif = needsClarification(text);
+  if (clarif) {
+    const sess = getSession(chatId);
+    sess.pendingClarification = text; // mémorise pour la prochaine réponse
+    pushHistory(chatId, 'assistant', clarif);
+    return ctx.reply(`🤔 ${clarif}`, { parse_mode: 'Markdown' });
+  }
+
+  // Mission via orchestrateur (fiche métier → skills, ou fallback queen)
   await ctx.sendChatAction('typing');
   const t0 = Date.now();
   try {
-    const result = await callQueenMission(text);
-    await sendMissionReport(ctx, text, result, Date.now() - t0, intent);
+    const onEvent = (evt) => {
+      if (evt.type === 'fiche_match') {
+        ctx.sendChatAction('typing').catch(() => {});
+      }
+    };
+
+    const result = await orchestrate(text, onEvent);
+    const replyText = formatOrchestratorResult(result);
+    pushHistory(chatId, 'assistant', replyText);
+    await ctx.reply(replyText, { parse_mode: 'Markdown' });
   } catch (e) {
+    recordError(e.message);
     await ctx.reply(`❌ Erreur : ${e.message}`);
   }
 });
+
+// Formate le résultat de l'orchestrateur pour Telegram
+function formatOrchestratorResult(result) {
+  const status = result.success ? '✅' : '❌';
+  const dur = `⏱ ${(result.duration_ms / 1000).toFixed(1)}s`;
+  const source = result.fiche
+    ? `🗂 ${result.fiche.nom} › ${result.workflow.nom}`
+    : `🤖 Queen IA`;
+
+  const body = (result.result || '').slice(0, 800);
+  return `${status} *Mission accomplie* ${dur}\n${source}\n\n${body}`;
+}
 
 // ─── Envoi de screenshot sur Telegram ────────────────────────────────────────
 
@@ -394,8 +487,13 @@ async function start() {
     console.warn('[Gateway] deleteWebhook warning:', e.message);
   }
 
+  // Démarrer les couches de fond
+  startAutoRefresh();      // World Model — contexte toutes les 5 min
+  startSystemWatcher();    // Proactive Loop — disk, PM2, emails, briefing, idle
+
   bot.launch({ dropPendingUpdates: true });
   console.log(`[Gateway] ✅ Jarvis Gateway démarré — bot actif, API sur :${API_PORT}`);
+  console.log(`[Gateway] World Model + Proactive Loop actifs`);
 }
 
 start();

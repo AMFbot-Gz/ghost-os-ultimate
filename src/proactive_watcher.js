@@ -87,6 +87,152 @@ let _watcherActive = false;
 let _lastPHash = "";
 let _watchInterval = null;
 
+// ─── Watcher Système (règles métier, sans vision) ─────────────────────────────
+
+import { execSync } from "child_process";
+
+// Timestamp de la dernière interaction Telegram
+let _lastInteraction = Date.now();
+let _emailUnreadSince = null; // timestamp depuis quand on a > 10 emails non lus
+let _lastBriefingDate = null; // YYYY-MM-DD de la dernière fois qu'on a envoyé le briefing
+
+// Mise à jour de la dernière interaction (appelé par jarvis-gateway)
+export function touchInteraction() {
+  _lastInteraction = Date.now();
+}
+
+async function checkDisk() {
+  try {
+    const out = execSync("df -h / | tail -1 | awk '{print $5}'", { encoding: "utf-8", timeout: 3000 });
+    const pct = parseInt(out.trim()); // ex: "72%"
+    if (pct >= 85) {
+      await alertTelegram(
+        `💾 Disque à **${pct}%** — espace critique (< 15% libre)`,
+        "Nettoyer le disque (node_modules, .git objects, Ollama models non utilisés)"
+      );
+      return true;
+    }
+  } catch { /* non-fatal */ }
+  return false;
+}
+
+async function checkPM2() {
+  try {
+    const out = execSync("pm2 jlist 2>/dev/null", { encoding: "utf-8", timeout: 5000 });
+    const procs = JSON.parse(out);
+    const errored = procs.filter(p => p.pm2_env?.status !== "online" && p.pm2_env?.status != null);
+    if (errored.length > 0) {
+      const names = errored.map(p => `\`${p.name}\` (${p.pm2_env.status})`).join(", ");
+      await alertTelegram(
+        `⚡ Processus PM2 en erreur : ${names}`,
+        `Relancer : \`pm2 restart ${errored.map(p => p.name).join(" ")}\``
+      );
+      // Tentative de restart automatique
+      for (const p of errored) {
+        try { execSync(`pm2 restart ${p.name}`, { timeout: 5000 }); } catch {}
+      }
+      return true;
+    }
+  } catch { /* non-fatal */ }
+  return false;
+}
+
+async function checkEmailCount() {
+  try {
+    const res = await fetch("http://localhost:3004/memory/recent?limit=20&tag=email", {
+      signal: AbortSignal.timeout(3000),
+    });
+    if (!res.ok) return false;
+    const data = await res.json();
+    const unread = (data.entries || []).filter(e => !e.read).length;
+
+    if (unread >= 10) {
+      if (!_emailUnreadSince) {
+        _emailUnreadSince = Date.now();
+        return false; // première détection — on attend 2h
+      }
+      const sinceMs = Date.now() - _emailUnreadSince;
+      if (sinceMs >= 2 * 60 * 60 * 1000) { // 2 heures
+        await alertTelegram(
+          `📧 ${unread} emails non lus depuis ${Math.round(sinceMs / 3600000)}h`,
+          "Trier les emails urgents"
+        );
+        _emailUnreadSince = null; // reset après alerte
+        return true;
+      }
+    } else {
+      _emailUnreadSince = null; // reset si moins de 10
+    }
+  } catch { /* non-fatal */ }
+  return false;
+}
+
+async function checkMorningBriefing() {
+  const now = new Date();
+  const hour = now.getHours();
+  const today = now.toISOString().slice(0, 10);
+
+  if (hour === 8 && _lastBriefingDate !== today) {
+    _lastBriefingDate = today;
+    await alertTelegram(
+      "🌅 Bonjour ! Voici votre briefing du matin.",
+      "Envoyer le briefing complet (emails urgents + agenda + système)"
+    );
+    return true;
+  }
+  return false;
+}
+
+async function checkIdleTooLong() {
+  const now = new Date();
+  const hour = now.getHours();
+  // Ne ping que pendant les heures de travail (8h-20h)
+  if (hour < 8 || hour >= 20) return false;
+
+  const idleMs = Date.now() - _lastInteraction;
+  const SIX_HOURS = 6 * 60 * 60 * 1000;
+
+  if (idleMs >= SIX_HOURS) {
+    _lastInteraction = Date.now(); // reset pour éviter les pings en boucle
+    await alertTelegram(
+      `💬 Aucune interaction depuis ${Math.round(idleMs / 3600000)}h — tout va bien ?`,
+      null
+    );
+    return true;
+  }
+  return false;
+}
+
+// ─── Boucle système (toutes les 5 min) ───────────────────────────────────────
+
+let _systemInterval = null;
+
+export function startSystemWatcher() {
+  if (_systemInterval) return;
+  console.log("[Watcher] Règles système démarrées (disk, pm2, emails, briefing, idle)");
+
+  _systemInterval = setInterval(async () => {
+    // Exécute les checks dans l'ordre, s'arrête à la première alerte envoyée
+    // pour ne pas spammer Telegram
+    await checkDisk()          ||
+    await checkPM2()           ||
+    await checkMorningBriefing() ||
+    await checkEmailCount()    ||
+    await checkIdleTooLong();
+  }, 5 * 60 * 1000); // toutes les 5 minutes
+
+  _systemInterval.unref?.();
+}
+
+export function stopSystemWatcher() {
+  if (_systemInterval) {
+    clearInterval(_systemInterval);
+    _systemInterval = null;
+  }
+}
+
+// ─── Vision watcher (écran) ───────────────────────────────────────────────────
+
 export async function startProactiveWatcher(intervalMs = 60000) {
   if (_watcherActive) return;
   _watcherActive = true;
@@ -94,48 +240,40 @@ export async function startProactiveWatcher(intervalMs = 60000) {
   const mode = process.env.LARUCHE_MODE || "balanced";
   const actualInterval = mode === "low" ? intervalMs * 5 : intervalMs;
 
-  console.log(`[Watcher] Démarré — scan toutes les ${actualInterval / 1000}s`);
+  console.log(`[Watcher] Vision démarré — scan toutes les ${actualInterval / 1000}s`);
 
   _watchInterval = setInterval(async () => {
     if (!_watcherActive) return;
 
     try {
-      // Prendre screenshot via Python (rapide, sans bloquer)
       const { execa } = await import("execa");
       const { stdout: b64 } = await execa("python3", ["-c", `
-import pyautogui, base64, io, hashlib
+import pyautogui, base64, io
 img = pyautogui.screenshot()
 img_small = img.resize((200, 150))
 buf = io.BytesIO()
 img_small.save(buf, 'PNG')
-data = buf.getvalue()
-print(base64.b64encode(data).decode())
+print(base64.b64encode(buf.getvalue()).decode())
       `], { timeout: 5000, reject: false });
 
       if (!b64?.trim()) return;
 
-      // pHash simple pour détecter les changements
-      const currentHash = b64.slice(100, 120); // fingerprint simplifié
-      if (currentHash === _lastPHash) return; // pas de changement
+      const currentHash = b64.slice(100, 120);
+      if (currentHash === _lastPHash) return;
       _lastPHash = currentHash;
 
-      // Analyse légère de l'écran (moondream est plus rapide que llava)
       const observation = await quickVisionCheck(
-        "Décris brièvement ce qui est affiché. Y a-t-il une erreur, notification urgente, ou alerte importante visible?"
+        "Y a-t-il une erreur, notification urgente, ou alerte importante visible à l'écran?"
       );
-
       if (!observation) return;
 
-      // Vérifier les patterns
       for (const pattern of WATCH_PATTERNS) {
         if (pattern.trigger.test(observation)) {
           await alertTelegram(observation.slice(0, 200), pattern.action);
-          break; // une seule alerte à la fois
+          break;
         }
       }
-
     } catch { /* non-fatal */ }
-
   }, actualInterval);
 }
 
@@ -145,5 +283,5 @@ export function stopProactiveWatcher() {
     clearInterval(_watchInterval);
     _watchInterval = null;
   }
-  console.log("[Watcher] Arrêté");
+  console.log("[Watcher] Vision arrêté");
 }
