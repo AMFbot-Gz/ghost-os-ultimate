@@ -245,6 +245,15 @@ export function startStandaloneServer(deps) {
     logger.info(`📖 Endpoints: http://localhost:${port}/`);
   });
 
+  // FIX — Gérer EADDRINUSE sans crash du processus
+  server.on('error', (err) => {
+    if (err.code === 'EADDRINUSE') {
+      logger.warn(`⚠️  Port ${port} déjà utilisé — instance déjà active ? Continuer sans rebind.`);
+    } else {
+      logger.error(`Erreur serveur HTTP: ${err.message}`);
+    }
+  });
+
   startCoeusLoop();
 
   // ─── Voice continue (optionnel — activer avec VOICE_ENABLED=true) ─────────────
