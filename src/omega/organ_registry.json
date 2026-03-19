@@ -1,0 +1,104 @@
+{
+  "open_app": {
+    "description": "Ouvre une application macOS via AppleScript ou open -a",
+    "path": "src/omega/organs/open_app.py",
+    "functions": [
+      "run"
+    ],
+    "created_at": "2026-03-19T03:12:55.868246",
+    "uses": 2
+  },
+  "mouse_click": {
+    "description": "Contrôle total de la souris: click, double-click, right-click, drag, move",
+    "path": "src/omega/organs/mouse_click.py",
+    "functions": [
+      "run",
+      "_find_element_ax"
+    ],
+    "created_at": "2026-03-19T03:12:55.868285",
+    "uses": 1
+  },
+  "type_text": {
+    "description": "Tape du texte dans l'application active via AppleScript ou pyautogui",
+    "path": "src/omega/organs/type_text.py",
+    "functions": [
+      "run",
+      "_type_applescript",
+      "_type_pyautogui"
+    ],
+    "created_at": "2026-03-19T03:12:55.868305",
+    "uses": 3
+  },
+  "press_key": {
+    "description": "Appuie sur n'importe quelle touche ou combinaison (cmd+c, escape, return, etc.)",
+    "path": "src/omega/organs/press_key.py",
+    "functions": [
+      "run",
+      "_press_key_applescript",
+      "_press_key_pyautogui"
+    ],
+    "created_at": "2026-03-19T03:12:55.868321",
+    "uses": 1
+  },
+  "run_terminal": {
+    "description": "Exécute n'importe quelle commande shell, optionnellement dans Terminal.app visible",
+    "path": "src/omega/organs/run_terminal.py",
+    "functions": [
+      "run",
+      "_run_in_terminal_app"
+    ],
+    "created_at": "2026-03-19T03:12:55.868335",
+    "uses": 5
+  },
+  "take_screenshot": {
+    "description": "Capture l'écran complet ou une région/fenêtre spécifique",
+    "path": "src/omega/organs/take_screenshot.py",
+    "functions": [
+      "run",
+      "_capture_fullscreen",
+      "_capture_region",
+      "_capture_window"
+    ],
+    "created_at": "2026-03-19T03:12:55.868349",
+    "uses": 1
+  },
+  "read_clipboard": {
+    "description": "Lit et écrit dans le presse-papiers macOS via pbpaste/pbcopy",
+    "path": "src/omega/organs/read_clipboard.py",
+    "functions": [
+      "run",
+      "_read_clipboard",
+      "_write_clipboard"
+    ],
+    "created_at": "2026-03-19T03:12:55.868361",
+    "uses": 0
+  },
+  "scroll": {
+    "description": "Fait défiler la page dans n'importe quelle direction",
+    "path": "src/omega/organs/scroll.py",
+    "functions": [
+      "run",
+      "_scroll_applescript"
+    ],
+    "created_at": "2026-03-19T03:12:55.868374",
+    "uses": 0
+  },
+  "drag_drop": {
+    "description": "Effectue un glisser-déposer entre deux points à l'écran",
+    "path": "src/omega/organs/drag_drop.py",
+    "functions": [
+      "run"
+    ],
+    "created_at": "2026-03-19T03:12:55.868387",
+    "uses": 0
+  },
+  "see_screen": {
+    "description": "Capture et analyse visuellement l'écran avec llava:7b via Ollama",
+    "path": "src/omega/organs/see_screen.py",
+    "functions": [
+      "run"
+    ],
+    "created_at": "2026-03-19T03:12:55.868399",
+    "uses": 7
+  }
+}

@@ -1,1 +1,8 @@
-{}
+{
+  "ouvre chrome": {
+    "skill": "open_app",
+    "agent": "open_app",
+    "hits": 1,
+    "lastSeen": "2026-03-18T03:38:10.679Z"
+  }
+}

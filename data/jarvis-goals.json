@@ -1,6 +1,6 @@
 {
   "version": "1.0.0",
-  "lastUpdated": "2026-03-18T02:30:00.543Z",
+  "lastUpdated": "2026-03-19T02:30:00.213Z",
   "goals": [
     {
       "id": "daily-email-triage",
@@ -10,8 +10,8 @@
       "skill": "email-triage",
       "active": true,
       "notify": true,
-      "lastRun": null,
-      "runCount": 0
+      "lastRun": "2026-03-18T07:00:00.165Z",
+      "runCount": 1
     },
     {
       "id": "weekly-shopify-report",
@@ -32,8 +32,8 @@
       "skill": "ruche-corps-bridge",
       "active": true,
       "notify": false,
-      "lastRun": "2026-03-18T02:30:00.505Z",
-      "runCount": 1
+      "lastRun": "2026-03-19T02:30:00.213Z",
+      "runCount": 49
     },
     {
       "id": "memory-cleanup",
@@ -43,8 +43,8 @@
       "skill": null,
       "active": true,
       "notify": false,
-      "lastRun": null,
-      "runCount": 0
+      "lastRun": "2026-03-19T02:00:00.133Z",
+      "runCount": 1
     },
     {
       "id": "daily-system-report",
@@ -54,8 +54,8 @@
       "skill": null,
       "active": true,
       "notify": true,
-      "lastRun": null,
-      "runCount": 0
+      "lastRun": "2026-03-18T08:00:00.444Z",
+      "runCount": 1
     }
   ]
 }

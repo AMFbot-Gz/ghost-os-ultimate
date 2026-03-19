@@ -48,7 +48,7 @@ if not _ENV_FILE.exists():
 try:
     from scripts.preflight_cu import run_preflight
     _cu_profile = run_preflight()
-except Exception as _preflight_err:
+except BaseException as _preflight_err:  # KeyboardInterrupt est BaseException, pas Exception
     print(f"⚠️  Preflight CU ignoré: {_preflight_err}")
 
 PIDS_DIR = ROOT / "agent" / ".pids"

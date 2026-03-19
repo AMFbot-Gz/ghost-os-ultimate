@@ -1,8 +1,8 @@
 /**
- * src/jarvis-gateway.js — Jarvis Gateway Telegram Unique
- * Point d'entrée UNIQUE pour tous les messages Telegram.
+ * src/jarvis-gateway.js — Jarvis Gateway Telegram
  * dropPendingUpdates: true → élimine les 409 Conflict.
- * TELEGRAM_MODE=gateway doit être défini dans .env pour désactiver les autres bots.
+ * TELEGRAM_MODE=omega → désactivé, Omega gère le bot Telegram.
+ * TELEGRAM_MODE=gateway → ce fichier est le listener unique.
  */
 import { Telegraf } from 'telegraf';
 import dotenv from 'dotenv';
@@ -512,25 +512,32 @@ async function sendMissionReport(ctx, command, result, duration_ms, intentObj) {
 }
 
 // ─── Démarrage ────────────────────────────────────────────────────────────────
-// Nettoie d'abord le webhook/updates en attente pour éviter 409
-async function start() {
-  try {
-    await fetch(`https://api.telegram.org/bot${TOKEN}/deleteWebhook?drop_pending_updates=true`);
-    console.log('[Gateway] Webhook supprimé + pending updates droppés');
-  } catch (e) {
-    console.warn('[Gateway] deleteWebhook warning:', e.message);
+// Démarrer les couches de fond (toujours actives, même sans bot Telegram)
+startAutoRefresh();
+startSystemWatcher();
+
+// Guard : si TELEGRAM_MODE=omega, Omega gère le bot — ne pas poller ici
+if (process.env.TELEGRAM_MODE === 'omega') {
+  console.log('[Gateway] TELEGRAM_MODE=omega — bot Telegram délégué à Omega (:8021)');
+  console.log('[Gateway] World Model + Proactive Loop actifs (sans polling Telegram)');
+  // Garder le process vivant pour PM2 (World Model + Watcher tournent en background)
+  setInterval(() => {}, 30_000);
+  process.once('SIGINT',  () => process.exit(0));
+  process.once('SIGTERM', () => process.exit(0));
+} else {
+  // Mode normal : jarvis-gateway est le listener Telegram
+  async function start() {
+    try {
+      await fetch(`https://api.telegram.org/bot${TOKEN}/deleteWebhook?drop_pending_updates=true`);
+      console.log('[Gateway] Webhook supprimé + pending updates droppés');
+    } catch (e) {
+      console.warn('[Gateway] deleteWebhook warning:', e.message);
+    }
+    bot.launch({ dropPendingUpdates: true });
+    console.log(`[Gateway] ✅ Jarvis Gateway démarré — bot actif, API sur :${API_PORT}`);
   }
-
-  // Démarrer les couches de fond
-  startAutoRefresh();      // World Model — contexte toutes les 5 min
-  startSystemWatcher();    // Proactive Loop — disk, PM2, emails, briefing, idle
-
-  bot.launch({ dropPendingUpdates: true });
-  console.log(`[Gateway] ✅ Jarvis Gateway démarré — bot actif, API sur :${API_PORT}`);
-  console.log(`[Gateway] World Model + Proactive Loop actifs`);
+  start();
+  process.once('SIGINT',  () => bot.stop('SIGINT'));
+  process.once('SIGTERM', () => bot.stop('SIGTERM'));
 }
 
-start();
-
-process.once('SIGINT',  () => bot.stop('SIGINT'));
-process.once('SIGTERM', () => bot.stop('SIGTERM'));

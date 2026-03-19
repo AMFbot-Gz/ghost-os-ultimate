@@ -18,6 +18,7 @@
  *  13. stitch-bridge     — Workflows stitch (vente/CRM/pipeline) :3006
  *  14. laruche-sync      — Sync bidirectionnel LaRuche ↔ ghost-os :3007
  *  15. pico-satellite    — Satellite PicoClaw Go lightweight agent (:8090)
+ *  16. omega             — Agent auto-codeur avec contrôle total souris/clavier/apps
  *
  * RÈGLE : UN SEUL processus écoute Telegram = jarvis-gateway
  */
@@ -37,11 +38,11 @@ module.exports = {
       max_memory_restart: '150M',
       env_production: {
         NODE_ENV: 'production',
-        TELEGRAM_MODE: 'gateway',
+        TELEGRAM_MODE: 'omega',
       },
       env_development: {
         NODE_ENV: 'development',
-        TELEGRAM_MODE: 'gateway',
+        TELEGRAM_MODE: 'omega',
       },
       log_file: '.laruche/logs/gateway.log',
       error_file: '.laruche/logs/gateway-error.log',
@@ -65,7 +66,7 @@ module.exports = {
         STANDALONE_MODE: 'true',
         API_PORT: '3002',
         HUD_PORT: '9003',
-        TELEGRAM_MODE: 'gateway',
+        TELEGRAM_MODE: 'omega',
         GHOST_OS_MODE: 'ultimate',
         LLM_TIMEOUT_MS: '30000',
         LLM_GLOBAL_TIMEOUT_MS: '45000',
@@ -76,7 +77,7 @@ module.exports = {
         STANDALONE_MODE: 'true',
         API_PORT: '3002',
         HUD_PORT: '9003',
-        TELEGRAM_MODE: 'gateway',
+        TELEGRAM_MODE: 'omega',
         GHOST_OS_MODE: 'ultimate',
         LLM_TIMEOUT_MS: '30000',
         LLM_GLOBAL_TIMEOUT_MS: '45000',
@@ -101,7 +102,7 @@ module.exports = {
       max_memory_restart: '2G',
       env_production: {
         PYTHONUNBUFFERED: '1',
-        TELEGRAM_MODE: 'gateway',
+        TELEGRAM_MODE: 'omega',
       },
       log_file: 'agent/logs/agents-startup.log',
       error_file: 'agent/logs/agents-startup-error.log',
@@ -169,13 +170,13 @@ module.exports = {
       max_memory_restart: '100M',
       env_production: {
         NODE_ENV: 'production',
-        TELEGRAM_MODE: 'gateway',
+        TELEGRAM_MODE: 'omega',
         MOLTBOT_BRIDGE_PORT: '3003',
         API_PORT: '3002',
       },
       env_development: {
         NODE_ENV: 'development',
-        TELEGRAM_MODE: 'gateway',
+        TELEGRAM_MODE: 'omega',
         MOLTBOT_BRIDGE_PORT: '3003',
         API_PORT: '3002',
       },
@@ -199,12 +200,12 @@ module.exports = {
       cron_restart: '0 4 * * *',
       env_production: {
         NODE_ENV: 'production',
-        TELEGRAM_MODE: 'gateway',
+        TELEGRAM_MODE: 'omega',
         API_PORT: '3002',
       },
       env_development: {
         NODE_ENV: 'development',
-        TELEGRAM_MODE: 'gateway',
+        TELEGRAM_MODE: 'omega',
         API_PORT: '3002',
       },
       log_file: '.laruche/logs/vital-loop.log',
@@ -226,13 +227,13 @@ module.exports = {
       max_memory_restart: '120M',
       env_production: {
         NODE_ENV: 'production',
-        TELEGRAM_MODE: 'gateway',
+        TELEGRAM_MODE: 'omega',
         API_PORT: '3002',
         GOALS_API_PORT: '3005',
       },
       env_development: {
         NODE_ENV: 'development',
-        TELEGRAM_MODE: 'gateway',
+        TELEGRAM_MODE: 'omega',
         API_PORT: '3002',
         GOALS_API_PORT: '3005',
       },
@@ -255,12 +256,12 @@ module.exports = {
       max_memory_restart: '200M',
       env_production: {
         NODE_ENV: 'production',
-        TELEGRAM_MODE: 'gateway',
+        TELEGRAM_MODE: 'omega',
         MEMORY_HUB_PORT: '3004',
       },
       env_development: {
         NODE_ENV: 'development',
-        TELEGRAM_MODE: 'gateway',
+        TELEGRAM_MODE: 'omega',
         MEMORY_HUB_PORT: '3004',
       },
       log_file: '.laruche/logs/memory-hub.log',
@@ -282,12 +283,12 @@ module.exports = {
       max_memory_restart: '150M',
       env_production: {
         NODE_ENV: 'production',
-        TELEGRAM_MODE: 'gateway',
+        TELEGRAM_MODE: 'omega',
         BRAIN_URL: 'http://localhost:8003',
       },
       env_development: {
         NODE_ENV: 'development',
-        TELEGRAM_MODE: 'gateway',
+        TELEGRAM_MODE: 'omega',
         BRAIN_URL: 'http://localhost:8003',
       },
       log_file: '.laruche/logs/self-repair.log',
@@ -310,12 +311,12 @@ module.exports = {
       cron_restart: '0 8 * * *',           // redémarrage propre après le briefing
       env_production: {
         NODE_ENV: 'production',
-        TELEGRAM_MODE: 'gateway',
+        TELEGRAM_MODE: 'omega',
         BRAIN_URL: 'http://localhost:8003',
       },
       env_development: {
         NODE_ENV: 'development',
-        TELEGRAM_MODE: 'gateway',
+        TELEGRAM_MODE: 'omega',
         BRAIN_URL: 'http://localhost:8003',
       },
       log_file: '.laruche/logs/night-worker.log',
@@ -337,13 +338,13 @@ module.exports = {
       max_memory_restart: '100M',
       env_production: {
         NODE_ENV: 'production',
-        TELEGRAM_MODE: 'gateway',
+        TELEGRAM_MODE: 'omega',
         STITCH_BRIDGE_PORT: '3006',
         STITCH_URL: 'http://localhost:3010',
       },
       env_development: {
         NODE_ENV: 'development',
-        TELEGRAM_MODE: 'gateway',
+        TELEGRAM_MODE: 'omega',
         STITCH_BRIDGE_PORT: '3006',
         STITCH_URL: 'http://localhost:3010',
       },
@@ -366,13 +367,13 @@ module.exports = {
       max_memory_restart: '100M',
       env_production: {
         NODE_ENV: 'production',
-        TELEGRAM_MODE: 'gateway',
+        TELEGRAM_MODE: 'omega',
         LARUCHE_SYNC_PORT: '3007',
         LARUCHE_URL: 'http://localhost:3000',
       },
       env_development: {
         NODE_ENV: 'development',
-        TELEGRAM_MODE: 'gateway',
+        TELEGRAM_MODE: 'omega',
         LARUCHE_SYNC_PORT: '3007',
         LARUCHE_URL: 'http://localhost:3000',
       },
@@ -408,5 +409,34 @@ module.exports = {
       log_date_format: 'YYYY-MM-DD HH:mm:ss',
       merge_logs: true,
     },
+
+
+    // ── 16. Omega — Agent auto-codeur, contrôle total macOS ──────────────────
+    {
+      name: 'omega',
+      script: 'src/omega/omega_daemon.py',
+      interpreter: 'python3',
+      watch: false,
+      autorestart: true,
+      max_restarts: 5,
+      min_uptime: '10s',
+      restart_delay: 10000,
+      max_memory_restart: '300M',
+      env_production: {
+        PYTHONUNBUFFERED: '1',
+        OLLAMA_HOST: 'http://localhost:11434',
+        OLLAMA_MODEL: 'ghost-os-architect:latest',
+      },
+      env_development: {
+        PYTHONUNBUFFERED: '1',
+        OLLAMA_HOST: 'http://localhost:11434',
+        OLLAMA_MODEL: 'ghost-os-architect:latest',
+      },
+      log_file: '.laruche/logs/omega.log',
+      error_file: '.laruche/logs/omega-error.log',
+      log_date_format: 'YYYY-MM-DD HH:mm:ss',
+      merge_logs: true,
+    },
+
   ],
 };

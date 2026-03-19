@@ -96,6 +96,9 @@ def check_accessibility() -> bool:
     """Vérifie les permissions d'accessibilité macOS."""
     if platform.system() != "Darwin":
         return True
+    # Skip sous PM2 — osascript nécessite une session GUI
+    if os.environ.get("PM2_HOME") or os.environ.get("pm_id") or os.environ.get("PM2_USAGE"):
+        return True  # Supposer OK sous PM2, vérifier à la demande
     try:
         r = subprocess.run(
             ["osascript", "-e",
@@ -103,7 +106,7 @@ def check_accessibility() -> bool:
             capture_output=True, text=True, timeout=5,
         )
         return r.returncode == 0
-    except Exception:
+    except BaseException:  # Capture KeyboardInterrupt + Exception
         return False
 
 

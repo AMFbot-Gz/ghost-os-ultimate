@@ -61,6 +61,18 @@
       "command": "/Applications/Pencil.app/Contents/Resources/app.asar.unpacked/out/mcp-server-darwin-x64",
       "args": ["--app", "desktop"],
       "env": {}
+    },
+    "omega": {
+      "type": "stdio",
+      "command": "python3",
+      "args": ["/Users/wiaamhadara/ghost-os-ultimate/mcp_servers/omega_mcp.py"],
+      "env": {
+        "OLLAMA_HOST": "http://localhost:11434",
+        "OLLAMA_MODEL": "ghost-os-architect:latest",
+        "MEMORY_URL": "http://localhost:8006",
+        "TELEGRAM_BOT_TOKEN": "${TELEGRAM_BOT_TOKEN}",
+        "ADMIN_TELEGRAM_ID": "${ADMIN_TELEGRAM_ID}"
+      }
     }
   }
 }
