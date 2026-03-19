@@ -18,7 +18,7 @@ async function callVisionPy(fn, args = {}) {
     join(ROOT, "src/vision.py"),
     "--fn", fn,
     "--args", JSON.stringify(args),
-  ], { reject: false, timeout: 60000 });
+  ], { reject: false, timeout: 120000, env: { ...process.env, OLLAMA_MODEL: "moondream:latest" } });
   try { return JSON.parse(stdout); } catch { return { success: false, error: stdout }; }
 }
 

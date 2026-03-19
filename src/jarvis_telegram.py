@@ -492,6 +492,15 @@ async def run_agent(chat_id: int, user_msg: str, bot: Bot) -> str:
     past = tool_recall(user_msg, limit=3)
     past_ctx = f"\nSouvenirs pertinents:\n{past}" if "Mémoire vide" not in past and "Rien trouvé" not in past else ""
 
+async def _safe_send(bot, chat_id: int, text: str):
+    """Envoie un message — fallback texte brut si Markdown invalide."""
+    for chunk in [text[i:i+4000] for i in range(0, max(len(text),1), 4000)]:
+        try:
+            await bot.send_message(chat_id=chat_id, text=chunk)
+        except Exception:
+            await bot.send_message(chat_id=chat_id, text=chunk.replace("*","").replace("`","").replace("_","").replace("[","").replace("]",""))
+
+
     system = f"""Tu es Jarvis, agent autonome de Wiaam sur macOS Intel x86_64.
 {_world_state()}
 Projets: ~/ghost-os-ultimate, ~/LaRuche, ~/Projects
@@ -525,7 +534,7 @@ Réponds en français. Court et direct."""
         finish = response.choices[0].finish_reason
 
         if msg.content and msg.tool_calls:
-            await bot.send_message(chat_id=chat_id, text=msg.content[:4000])
+            await _safe_send(bot, chat_id, msg.content)
 
         if finish != "tool_calls" or not msg.tool_calls:
             history.append({"role": "assistant", "content": msg.content or ""})
@@ -609,13 +618,12 @@ async def handle(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         col = _chroma()
         organs = [f.stem for f in ORGANS.glob("*.py") if not f.stem.startswith("_")]
         await msg.reply_text(
-            f"🤖 *Jarvis v3 actif*\n"
+            f"Jarvis v3 actif\n"
             f"Cerveau: {GLM_MODEL} (local)\n"
             f"Organes: {len(organs)} ({', '.join(organs[:4])}...)\n"
-            f"Mémoire: {col.count() if col else 0} souvenirs\n"
+            f"Memoire: {col.count() if col else 0} souvenirs\n"
             f"Outils custom: {len(_custom_tools)}\n\n"
-            f"Envoie une mission.",
-            parse_mode=ParseMode.MARKDOWN
+            f"Envoie une mission."
         )
         return
 
@@ -624,30 +632,27 @@ async def handle(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         return
 
     if text == "/organs":
-        await msg.reply_text(f"🦾 *Organes disponibles*\n\n{tool_list_organs()}", parse_mode=ParseMode.MARKDOWN)
+        await msg.reply_text(f"Organes disponibles:\n\n{tool_list_organs()}")
         return
 
     if text == "/memory":
         col = _chroma()
         recent = tool_recall("jarvis projet wiaam mission", 8)
-        await msg.reply_text(f"📚 *{col.count() if col else 0} souvenirs*\n\n{recent[:3000]}", parse_mode=ParseMode.MARKDOWN)
+        await msg.reply_text(f"{col.count() if col else 0} souvenirs:\n\n{recent[:3000]}")
         return
 
     if text == "/clear":
         conversations.pop(chat_id, None)
-        await msg.reply_text("🧹 Effacé.")
+        await msg.reply_text("Efface.")
         return
 
     await ctx.bot.send_chat_action(chat_id=chat_id, action=ChatAction.TYPING)
     try:
         reply = await run_agent(chat_id, text, ctx.bot)
-        for i in range(0, max(len(reply), 1), 4000):
-            chunk = reply[i:i+4000]
-            try:    await msg.reply_text(chunk, parse_mode=ParseMode.MARKDOWN)
-            except: await msg.reply_text(chunk)
+        await _safe_send(ctx.bot, chat_id, reply)
     except Exception as e:
         log.exception("Agent error")
-        await msg.reply_text(f"❌ {e}")
+        await msg.reply_text(f"Erreur: {e}")
 
 # ─── Main ────────────────────────────────────────────────────────────────────
 
