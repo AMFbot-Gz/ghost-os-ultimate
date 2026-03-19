@@ -126,28 +126,6 @@ module.exports = {
       log_date_format: 'YYYY-MM-DD HH:mm:ss',
     },
 
-    // ── jarvis-bot — Bot Telegram propulsé par Claude Sonnet ─────────────────
-    {
-      name: 'jarvis-bot',
-      script: 'src/jarvis_telegram.py',
-      interpreter: 'python3',
-      watch: false,
-      autorestart: true,
-      max_restarts: 20,
-      min_uptime: '5s',
-      restart_delay: 5000,
-      max_memory_restart: '200M',
-      log_file: '.laruche/logs/jarvis-bot.log',
-      error_file: '.laruche/logs/jarvis-bot-error.log',
-      log_date_format: 'YYYY-MM-DD HH:mm:ss',
-      env: {
-        PYTHONUNBUFFERED: '1',
-      },
-      env_development: {
-        PYTHONUNBUFFERED: '1',
-      }
-    },
-
     // ── 5. Ruche-corps Bridge — outils Python :8020 ─────────────────────────
     {
       name: 'ruche-bridge',
@@ -405,33 +383,28 @@ module.exports = {
       merge_logs: true,
     },
 
-    // ── 15. Pico Satellite — agent PicoClaw Go léger :8090 ───────────────────
-    // Si le binaire satellite/picoclaw est absent, le processus démarre quand même
-    // mais isAvailable() retourne false → Jarvis continue sans lui.
+    // ── 15. PicoClaw Gateway — agent IA Go, Telegram natif ───────────────────
+    // Remplace jarvis-bot (Python) + pico-satellite (JS).
+    // PicoClaw gère Telegram, LLM (GLM via Ollama), tools et MCP directement.
+    // Config : ~/.picoclaw/config.json | Workspace : ~/ghost-os-ultimate/AGENTS.md
     {
-      name: 'pico-satellite',
-      script: 'src/pico-satellite-daemon.js',
-      interpreter: 'node',
+      name: 'picoclaw-gateway',
+      script: '/usr/local/bin/picoclaw',
+      args: 'gateway',
       watch: false,
       autorestart: true,
       max_restarts: 10,
       min_uptime: '10s',
-      restart_delay: 10000,
-      max_memory_restart: '80M',
-      env_production: {
-        NODE_ENV: 'production',
-        PICOCLAW_PORT: '8090',
+      restart_delay: 5000,
+      max_memory_restart: '150M',
+      env: {
+        PICOCLAW_HOME: '/Users/wiaamhadara/.picoclaw',
       },
-      env_development: {
-        NODE_ENV: 'development',
-        PICOCLAW_PORT: '8090',
-      },
-      log_file: '.laruche/logs/pico-satellite.log',
-      error_file: '.laruche/logs/pico-satellite-error.log',
+      log_file: '.laruche/logs/picoclaw-gateway.log',
+      error_file: '.laruche/logs/picoclaw-gateway-error.log',
       log_date_format: 'YYYY-MM-DD HH:mm:ss',
       merge_logs: true,
     },
-
 
     // ── 16. Omega — Agent auto-codeur, contrôle total macOS ──────────────────
     {
