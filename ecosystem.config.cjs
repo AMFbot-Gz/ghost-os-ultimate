@@ -126,6 +126,28 @@ module.exports = {
       log_date_format: 'YYYY-MM-DD HH:mm:ss',
     },
 
+    // ── jarvis-bot — Bot Telegram propulsé par Claude Sonnet ─────────────────
+    {
+      name: 'jarvis-bot',
+      script: 'src/jarvis_telegram.py',
+      interpreter: 'python3',
+      watch: false,
+      autorestart: true,
+      max_restarts: 20,
+      min_uptime: '5s',
+      restart_delay: 5000,
+      max_memory_restart: '200M',
+      log_file: '.laruche/logs/jarvis-bot.log',
+      error_file: '.laruche/logs/jarvis-bot-error.log',
+      log_date_format: 'YYYY-MM-DD HH:mm:ss',
+      env: {
+        PYTHONUNBUFFERED: '1',
+      },
+      env_development: {
+        PYTHONUNBUFFERED: '1',
+      }
+    },
+
     // ── 5. Ruche-corps Bridge — outils Python :8020 ─────────────────────────
     {
       name: 'ruche-bridge',
