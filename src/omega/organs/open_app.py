@@ -13,8 +13,9 @@ def run(params: dict) -> dict:
       - app (str): nom de l'application (ex: "Safari", "Terminal", "Google Chrome")
       - url (str, optionnel): URL à ouvrir dans le navigateur
     """
-    app = params.get("app", "")
-    url = params.get("url", "")
+    # Accepter plusieurs noms de paramètre courants
+    app = params.get("app") or params.get("name") or params.get("application") or params.get("app_name") or ""
+    url = params.get("url") or params.get("link") or ""
 
     if not app:
         return {"success": False, "result": "Paramètre 'app' requis", "data": None}

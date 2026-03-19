@@ -14,7 +14,59 @@ SANDBOX_DIR = Path(__file__).parent.parent / "sandbox"
 SANDBOX_DIR.mkdir(exist_ok=True)
 
 OLLAMA_URL = os.getenv("OLLAMA_HOST", "http://localhost:11434")
-VISION_MODEL = "llava:7b"
+VISION_MODEL = os.getenv("OLLAMA_MODEL_VISION", "llava:7b")
+
+
+def _capture_screen(save_path: str) -> bool:
+    """Tente de capturer l'écran avec plusieurs méthodes."""
+    # Méthode 1: screencapture -x (nécessite Screen Recording permission)
+    result = subprocess.run(
+        ["screencapture", "-x", save_path],
+        capture_output=True, text=True, timeout=10
+    )
+    if result.returncode == 0 and os.path.exists(save_path) and os.path.getsize(save_path) > 1000:
+        return True
+
+    # Méthode 2: screencapture sans -x (avec son)
+    result = subprocess.run(
+        ["screencapture", save_path],
+        capture_output=True, text=True, timeout=10
+    )
+    if result.returncode == 0 and os.path.exists(save_path) and os.path.getsize(save_path) > 1000:
+        return True
+
+    # Méthode 3: PyObjC Quartz (si disponible)
+    try:
+        import Quartz
+        image = Quartz.CGWindowListCreateImage(
+            Quartz.CGRectInfinite,
+            Quartz.kCGWindowListOptionOnScreenOnly,
+            Quartz.kCGNullWindowID,
+            Quartz.kCGWindowImageDefault
+        )
+        if image:
+            import Cocoa
+            bmp = Quartz.CGBitmapContextCreate(
+                None,
+                Quartz.CGImageGetWidth(image),
+                Quartz.CGImageGetHeight(image),
+                8, 0,
+                Quartz.CGColorSpaceCreateDeviceRGB(),
+                Quartz.kCGImageAlphaPremultipliedLast
+            )
+            Quartz.CGContextDrawImage(bmp, ((0, 0), (Quartz.CGImageGetWidth(image), Quartz.CGImageGetHeight(image))), image)
+            dest = Quartz.CGImageDestinationCreateWithURL(
+                Cocoa.NSURL.fileURLWithPath_(save_path),
+                "public.png", 1, None
+            )
+            Quartz.CGImageDestinationAddImage(dest, Quartz.CGBitmapContextCreateImage(bmp), None)
+            Quartz.CGImageDestinationFinalize(dest)
+            if os.path.exists(save_path) and os.path.getsize(save_path) > 1000:
+                return True
+    except Exception:
+        pass
+
+    return False
 
 
 def run(params: dict) -> dict:
@@ -31,16 +83,15 @@ def run(params: dict) -> dict:
 
     try:
         # 1. Capturer l'écran
-        result = subprocess.run(
-            ["screencapture", "-x", save_path],
-            capture_output=True, text=True, timeout=10
-        )
-
-        if result.returncode != 0 or not os.path.exists(save_path):
+        if not _capture_screen(save_path):
             return {
                 "success": False,
-                "result": "Impossible de capturer l'écran",
-                "data": None
+                "result": (
+                    "Impossible de capturer l'écran. "
+                    "Autorisation Screen Recording requise : "
+                    "Préférences Système → Confidentialité → Enregistrement d'écran → ajouter Terminal."
+                ),
+                "data": {"permission_required": "Screen Recording"}
             }
 
         # 2. Encoder en base64
@@ -49,7 +100,7 @@ def run(params: dict) -> dict:
 
         # 3. Appel llava via Ollama
         try:
-            import urllib.request, urllib.error
+            import urllib.request
             payload = json.dumps({
                 "model": model,
                 "prompt": question,

@@ -51,22 +51,41 @@ def run(params: dict) -> dict:
 
 def _capture_fullscreen(filepath: str) -> dict:
     """Capture l'écran entier via screencapture."""
+    # Essai 1: avec -x (silencieux, nécessite Screen Recording permission)
     result = subprocess.run(
         ["screencapture", "-x", filepath],
         capture_output=True, text=True, timeout=10
     )
-
-    if result.returncode == 0 and os.path.exists(filepath):
+    if result.returncode == 0 and os.path.exists(filepath) and os.path.getsize(filepath) > 1000:
         size = os.path.getsize(filepath)
         return {
             "success": True,
             "result": f"Screenshot sauvegardé: {filepath}",
             "data": {"path": filepath, "size": size, "type": "fullscreen"}
         }
+
+    # Essai 2: sans -x
+    result2 = subprocess.run(
+        ["screencapture", filepath],
+        capture_output=True, text=True, timeout=10
+    )
+    if result2.returncode == 0 and os.path.exists(filepath) and os.path.getsize(filepath) > 1000:
+        size = os.path.getsize(filepath)
+        return {
+            "success": True,
+            "result": f"Screenshot sauvegardé: {filepath}",
+            "data": {"path": filepath, "size": size, "type": "fullscreen"}
+        }
+
+    err = (result.stderr or result2.stderr or "could not create image from display").strip()
     return {
         "success": False,
-        "result": f"Erreur screencapture: {result.stderr.strip()}",
-        "data": None
+        "result": (
+            f"Erreur screencapture: {err}. "
+            "Permission Screen Recording requise : Préférences Système → Confidentialité → "
+            "Enregistrement d'écran → ajouter Terminal.app."
+        ),
+        "data": {"permission_required": "Screen Recording"}
     }
 
 

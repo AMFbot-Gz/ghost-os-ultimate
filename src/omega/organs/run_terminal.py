@@ -19,8 +19,9 @@ def run(params: dict) -> dict:
       - visible (bool, optionnel): ouvrir dans Terminal.app visible (défaut: False)
       - env (dict, optionnel): variables d'environnement additionnelles
     """
-    cmd = params.get("cmd", "")
-    cwd = params.get("cwd", os.path.expanduser("~"))
+    # Accepter plusieurs noms de paramètre courants
+    cmd = params.get("cmd") or params.get("command") or params.get("shell_command") or params.get("bash") or params.get("script") or ""
+    cwd = params.get("cwd") or params.get("working_dir") or params.get("directory") or os.path.expanduser("~")
     timeout = params.get("timeout", 30)
     shell_mode = params.get("shell", True)
     visible = params.get("visible", False)

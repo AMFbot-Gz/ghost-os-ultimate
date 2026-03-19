@@ -1,6 +1,6 @@
 {
   "open_app": {
-    "description": "Ouvre une application macOS via AppleScript ou open -a",
+    "description": "Ouvre une application macOS via AppleScript ou open -a. Paramètres: app (str, requis: nom de l'app ex: 'Safari', 'Terminal', 'Google Chrome'), url (str, optionnel: URL à ouvrir)",
     "path": "src/omega/organs/open_app.py",
     "functions": [
       "run"
@@ -9,7 +9,7 @@
     "uses": 2
   },
   "mouse_click": {
-    "description": "Contrôle total de la souris: click, double-click, right-click, drag, move",
+    "description": "Contrôle total de la souris: click, double-click, right-click, drag, move. Paramètres: x (int), y (int), action (str: 'click'|'double'|'right'|'move'), description (str: description sémantique de l'élément à cliquer)",
     "path": "src/omega/organs/mouse_click.py",
     "functions": [
       "run",
@@ -19,7 +19,7 @@
     "uses": 1
   },
   "type_text": {
-    "description": "Tape du texte dans l'application active via AppleScript ou pyautogui",
+    "description": "Tape du texte dans l'application active via AppleScript ou pyautogui. Paramètres: text (str, requis: texte à taper), clear_first (bool: effacer avant, défaut false)",
     "path": "src/omega/organs/type_text.py",
     "functions": [
       "run",
@@ -30,7 +30,7 @@
     "uses": 3
   },
   "press_key": {
-    "description": "Appuie sur n'importe quelle touche ou combinaison (cmd+c, escape, return, etc.)",
+    "description": "Appuie sur n'importe quelle touche ou combinaison clavier. Paramètres: key (str, requis: ex 'return', 'escape', 'cmd+c', 'cmd+v', 'tab', 'space', 'up', 'down'), count (int: nombre de fois, défaut 1)",
     "path": "src/omega/organs/press_key.py",
     "functions": [
       "run",
@@ -41,7 +41,7 @@
     "uses": 1
   },
   "run_terminal": {
-    "description": "Exécute n'importe quelle commande shell, optionnellement dans Terminal.app visible",
+    "description": "Exécute n'importe quelle commande shell bash/zsh sur le Mac. Paramètres: cmd (str, requis: commande à exécuter ex 'ls -la', 'pwd', 'cat fichier.txt'), cwd (str: répertoire, défaut home), timeout (int: secondes, défaut 30), visible (bool: ouvrir Terminal.app visible, défaut false)",
     "path": "src/omega/organs/run_terminal.py",
     "functions": [
       "run",
@@ -51,7 +51,7 @@
     "uses": 5
   },
   "take_screenshot": {
-    "description": "Capture l'écran complet ou une région/fenêtre spécifique",
+    "description": "Capture l'écran complet ou une région/fenêtre et sauvegarde en PNG. Paramètres: filename (str: nom fichier, auto si absent), window (str: nom app à capturer), region (dict: {x,y,w,h} pour capture partielle)",
     "path": "src/omega/organs/take_screenshot.py",
     "functions": [
       "run",
@@ -63,7 +63,7 @@
     "uses": 1
   },
   "read_clipboard": {
-    "description": "Lit et écrit dans le presse-papiers macOS via pbpaste/pbcopy",
+    "description": "Lit et écrit dans le presse-papiers macOS via pbpaste/pbcopy. Paramètres: action (str: 'read'|'write', défaut 'read'), text (str: texte à écrire si action=write)",
     "path": "src/omega/organs/read_clipboard.py",
     "functions": [
       "run",
@@ -74,7 +74,7 @@
     "uses": 0
   },
   "scroll": {
-    "description": "Fait défiler la page dans n'importe quelle direction",
+    "description": "Fait défiler la page dans n'importe quelle direction. Paramètres: direction (str: 'up'|'down'|'left'|'right', défaut 'down'), amount (int: pixels ou clics, défaut 3)",
     "path": "src/omega/organs/scroll.py",
     "functions": [
       "run",
@@ -84,7 +84,7 @@
     "uses": 0
   },
   "drag_drop": {
-    "description": "Effectue un glisser-déposer entre deux points à l'écran",
+    "description": "Effectue un glisser-déposer entre deux points à l'écran. Paramètres: x1 (int), y1 (int), x2 (int), y2 (int), duration (float: durée en secondes, défaut 0.5)",
     "path": "src/omega/organs/drag_drop.py",
     "functions": [
       "run"
@@ -93,7 +93,7 @@
     "uses": 0
   },
   "see_screen": {
-    "description": "Capture et analyse visuellement l'écran avec llava:7b via Ollama",
+    "description": "Capture et analyse visuellement l'écran avec llava:7b via Ollama. Paramètres: question (str: question à poser sur l'écran, ex 'Qu\\'est-ce qui est affiché?'). Nécessite permission Screen Recording macOS.",
     "path": "src/omega/organs/see_screen.py",
     "functions": [
       "run"

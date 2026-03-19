@@ -16,7 +16,7 @@ def run(params: dict) -> dict:
       - clear_first (bool, optionnel): sélectionner tout avant de taper (défaut: False)
       - method (str): "pyautogui" | "applescript" (défaut: "applescript")
     """
-    text = params.get("text", "")
+    text = params.get("text") or params.get("content") or params.get("message") or params.get("input") or ""
     interval = params.get("interval", 0.03)
     clear_first = params.get("clear_first", False)
     method = params.get("method", "applescript")

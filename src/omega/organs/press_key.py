@@ -57,7 +57,7 @@ def run(params: dict) -> dict:
       {"key": "cmd+v"}        # coller
       {"key": "tab", "count": 3}
     """
-    key_combo = params.get("key", "")
+    key_combo = params.get("key") or params.get("keys") or params.get("shortcut") or params.get("keycode") or ""
     count = params.get("count", 1)
 
     if not key_combo:

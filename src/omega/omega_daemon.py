@@ -52,15 +52,13 @@ TG_BASE     = f"https://api.telegram.org/bot{TG_TOKEN}"
 # ─── Helpers Telegram ────────────────────────────────────────────────────────
 
 def tg_send(chat_id: str, text: str):
-    """Envoie un message Telegram (sendMessage)."""
+    """Envoie un message Telegram (sendMessage). Fallback texte brut si Markdown échoue."""
     if not TG_TOKEN:
         return
-    payload = json.dumps({
-        "chat_id": chat_id,
-        "text": text[:4096],
-        "parse_mode": "Markdown"
-    }).encode()
-    try:
+    text = text[:4096]
+
+    def _post(payload_dict: dict):
+        payload = json.dumps(payload_dict).encode()
         req = urllib.request.Request(
             f"{TG_BASE}/sendMessage",
             data=payload,
@@ -68,8 +66,15 @@ def tg_send(chat_id: str, text: str):
             method="POST"
         )
         urllib.request.urlopen(req, timeout=10, context=_SSL_CTX)
+
+    try:
+        _post({"chat_id": chat_id, "text": text, "parse_mode": "Markdown"})
     except Exception as e:
-        print(f"[OmegaTG] sendMessage erreur: {e}")
+        # 400 = Markdown invalide → retenter sans parse_mode
+        try:
+            _post({"chat_id": chat_id, "text": text})
+        except Exception as e2:
+            print(f"[OmegaTG] sendMessage erreur: {e2}")
 
 
 def tg_get_updates(offset: int, timeout: int = 25) -> list:
